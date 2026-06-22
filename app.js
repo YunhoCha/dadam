@@ -296,9 +296,21 @@ function makeChip(t, key) {
   const isStart = key === t.date;
   const isEnd = key === (t.endDate || t.date);
   const weekStart = parseKey(key).getDay() === 0;
-  let cls = `chip ${cats[0] ? colorClass(cats[0].color) : "c-sky"}` + (isDone(t, key) ? " done" : "");
+  const done = isDone(t, key);
+  let cls = `chip item-chip ${cats[0] ? colorClass(cats[0].color) : "c-sky"}` + (done ? " done" : "");
   if (range) cls += " range-chip" + (isStart ? " r-start" : "") + (isEnd ? " r-end" : "");
   chip.className = cls;
+  chip.title = (t.text || "(빈 항목)") + (range ? ` · ${t.date.slice(5)}~${(t.endDate).slice(5)}` : "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
+
+  // 칩 클릭 → 상세 모달(메모 포함)
+  chip.addEventListener("click", (e) => { e.stopPropagation(); selectDate(key); openItemModal(t); });
+
+  // 기간 연속 바(시작·주 시작 아닌 날): 라벨/체크박스 없는 바
+  if (range && !isStart && !weekStart) {
+    chip.innerHTML = `&nbsp;`;
+    return chip;
+  }
+
   const time = t.start ? `<b>${t.start}</b> ` : "";
   const star = t.star ? "★ " : "";
   const rec = t.recur ? " ↻" : "";
@@ -306,16 +318,16 @@ function makeChip(t, key) {
     ? `<span class="chip-cats">${cats.map((c) => `<i class="cdot ${colorClass(c.color)}"></i>`).join("")}</span>`
     : "";
   const noteIco = (t.note && t.note.trim()) ? `<span class="chip-note">📝</span>` : "";
-  // 기간 작업: 시작일·주 시작일에만 라벨, 나머지 날은 연속 바
-  if (range && !isStart && !weekStart) {
-    chip.innerHTML = `&nbsp;`;
-  } else {
-    chip.innerHTML = `${star}${time}${dots}${noteIco}${escapeHtml(t.text) || "(빈 항목)"}${rec}`;
-  }
-  chip.title = (t.text || "(빈 항목)") + (range ? ` · ${t.date.slice(5)}~${(t.endDate).slice(5)}` : "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
+  chip.innerHTML =
+    `<span class="chip-check${done ? " on" : ""}" title="완료 표시"></span>` +
+    `<span class="chip-label">${star}${time}${escapeHtml(t.text) || "(빈 항목)"}${rec}</span>` +
+    `<span class="chip-right">${dots}${noteIco}</span>`;
 
-  // 클릭 → 상세 모달(메모 포함)
-  chip.addEventListener("click", (e) => { e.stopPropagation(); selectDate(key); openItemModal(t); });
+  // 왼쪽 체크박스 → 완료 토글 (모달은 안 열림)
+  chip.querySelector(".chip-check").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleDone(t, key); save(); renderCalendar(); renderDayPanel();
+  });
 
   if (!t.recur && !range) {
     chip.draggable = true;
