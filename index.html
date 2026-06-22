@@ -236,9 +236,23 @@
   <script src="app.js"></script>
   <script src="sync.js"></script>
   <script>
-    // PWA 오프라인/설치 지원
+    // PWA 오프라인/설치 지원 + 새 버전 자동 적용
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+      let reloading = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloading) return; reloading = true; location.reload();   // 새 SW 활성화 → 새 코드로 새로고침
+      });
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").then((reg) => {
+          reg.update();
+          reg.addEventListener("updatefound", () => {
+            const nw = reg.installing;
+            nw && nw.addEventListener("statechange", () => {
+              if (nw.state === "installed" && navigator.serviceWorker.controller) location.reload();
+            });
+          });
+        }).catch(() => {});
+      });
     }
   </script>
 </body>
