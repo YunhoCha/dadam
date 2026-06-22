@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>다담 — 하루를 담다</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <!-- PWA: 모바일 홈 화면 설치 -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#bfe2ff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="다담" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+</head>
+<body>
+  <div class="app">
+    <!-- 메인: 캘린더 -->
+    <main class="main">
+      <header class="cal-header">
+        <div class="cal-title">
+          <div class="brand-mark">다</div>
+          <button class="ghost-btn" id="todayBtn">오늘</button>
+          <button class="icon-btn" id="prevBtn" aria-label="이전 달">‹</button>
+          <button class="icon-btn" id="nextBtn" aria-label="다음 달">›</button>
+          <h2 id="monthLabel">2026년 6월</h2>
+        </div>
+        <div class="global-search">
+          <input type="text" id="globalSearch" placeholder="🔍 전체 검색 (일정·할 일·메모)" autocomplete="off" />
+          <div class="search-results" id="searchResults" hidden></div>
+        </div>
+      </header>
+
+      <div class="cat-filter" id="catFilter"></div>
+
+      <div class="weekday-row">
+        <span class="sun">일</span><span>월</span><span>화</span><span>수</span>
+        <span>목</span><span>금</span><span class="sat">토</span>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+    </main>
+
+    <!-- 우측 패널 -->
+    <section class="side-panel">
+      <!-- 탭 -->
+      <div class="panel-tabs" id="panelTabs">
+        <button class="ptab on" data-tab="day"><span>🗓️</span> 일정 · 할 일</button>
+        <button class="ptab" data-tab="memo"><span>📝</span> 메모</button>
+      </div>
+
+      <!-- 탭1: 마감 + 할 일 + 일지 -->
+      <div class="tab-pane on" data-pane="day">
+      <!-- 다가오는 마감 -->
+      <div class="panel-deadlines">
+        <div class="sec-head">
+          <h3>⏰ 다가오는 마감</h3>
+          <button class="icon-btn sm" id="addDeadline" title="마감 추가">＋</button>
+        </div>
+        <div class="deadline-list" id="deadlineList"></div>
+      </div>
+
+      <!-- 선택한 날짜: 할 일 + 일지 -->
+      <div class="panel-day">
+        <div class="day-head">
+          <div>
+            <p class="tp-eyebrow" id="tpEyebrow">선택한 날짜</p>
+            <h3 id="tpDate">날짜를 선택하세요</h3>
+          </div>
+          <div class="tp-progress" title="완료율">
+            <svg viewBox="0 0 36 36" class="ring">
+              <path class="ring-bg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
+              <path class="ring-fg" id="ringFg" d="M18 2.5 a 15.5 15.5 0 0 1 0 31 a 15.5 15.5 0 0 1 0 -31" />
+            </svg>
+            <span id="ringText">0%</span>
+          </div>
+        </div>
+
+        <div class="block-list" id="blockList"></div>
+        <button class="add-block" id="addBlock"><span>＋</span> 할 일 추가 <kbd>Enter</kbd></button>
+
+        <!-- 오늘의 일지 -->
+        <div class="journal">
+          <div class="journal-head">
+            <h4>📔 오늘의 일지</h4>
+            <div class="mood-picker" id="moodPicker"></div>
+          </div>
+          <div class="journal-tools">
+            <button class="mini-btn" id="tplBtn">＋ 회고 템플릿</button>
+            <span class="journal-saved" id="journalSaved"></span>
+          </div>
+          <div class="journal-body" id="journalBody" contenteditable="true" data-ph="오늘 하루를 기록해보세요…"></div>
+        </div>
+      </div>
+      </div><!-- /tab-pane day -->
+
+      <!-- 탭2: 메모 -->
+      <div class="tab-pane" data-pane="memo">
+      <div class="panel-memo">
+        <div class="sec-head">
+          <h3>📝 메모</h3>
+          <button class="icon-btn sm" id="addMemo" title="새 메모">＋</button>
+        </div>
+        <input type="text" class="memo-search" id="memoSearch" placeholder="메모 검색…" autocomplete="off" />
+        <div class="memo-list" id="memoList"></div>
+      </div>
+      </div><!-- /tab-pane memo -->
+    </section>
+  </div>
+
+  <!-- ===== 할 일/일정 상세 모달 ===== -->
+  <div class="modal" id="itemModal" hidden>
+    <div class="modal-backdrop" data-close="itemModal"></div>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <span class="modal-title-txt">일정 / 할 일</span>
+        <button class="icon-btn sm danger" id="itemDelete" title="삭제">🗑</button>
+        <button class="icon-btn sm" data-close="itemModal" title="닫기">✕</button>
+      </div>
+      <input class="field-input big" id="itemText" placeholder="할 일 / 일정 내용" />
+
+      <div class="field-row">
+        <label>시간</label>
+        <input type="time" id="itemStart" /> <span class="tilde">~</span> <input type="time" id="itemEnd" />
+      </div>
+
+      <div class="field-row">
+        <label>카테고리</label>
+        <div class="cat-choose" id="itemCats"></div>
+      </div>
+
+      <div class="field-row">
+        <label>중요</label>
+        <button class="star-toggle" id="itemStar">☆ 별표</button>
+      </div>
+
+      <div class="field-row">
+        <label>반복</label>
+        <select id="itemRecur">
+          <option value="">반복 안 함</option>
+          <option value="weekly">매주</option>
+          <option value="biweekly">격주</option>
+        </select>
+        <span class="recur-until" id="recurUntilWrap" hidden>까지 <input type="date" id="itemUntil" /></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 마감 모달 ===== -->
+  <div class="modal" id="deadlineModal" hidden>
+    <div class="modal-backdrop" data-close="deadlineModal"></div>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <span class="modal-title-txt">마감 / 데드라인</span>
+        <button class="icon-btn sm danger" id="deadlineDelete" title="삭제">🗑</button>
+        <button class="icon-btn sm" data-close="deadlineModal" title="닫기">✕</button>
+      </div>
+      <input class="field-input big" id="dlTitle" placeholder="예: 졸업논문 초고 제출" />
+      <div class="field-row">
+        <label>마감일</label>
+        <input type="date" id="dlDate" />
+      </div>
+      <div class="field-row">
+        <label>카테고리</label>
+        <div class="cat-choose" id="dlCats"></div>
+      </div>
+      <div class="field-sub">
+        <div class="sub-head"><label>진행 단계</label><button class="mini-btn" id="dlAddSub">＋ 단계 추가</button></div>
+        <div class="sub-list" id="dlSubList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 메모 모달 ===== -->
+  <div class="modal" id="memoModal" hidden>
+    <div class="modal-backdrop" data-close="memoModal"></div>
+    <div class="modal-card wide" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <button class="pin-btn" id="memoPin" title="고정">📌</button>
+        <span class="memo-saved" id="memoSaved">저장됨</span>
+        <button class="icon-btn sm danger" id="memoDelete" title="삭제">🗑</button>
+        <button class="icon-btn sm" data-close="memoModal" title="닫기">✕</button>
+      </div>
+      <input class="memo-title" id="memoTitle" placeholder="제목 없음" />
+      <div class="memo-toolbar">
+        <button data-cmd="bold" title="굵게"><b>B</b></button>
+        <button data-cmd="bullet" title="목록">• 목록</button>
+        <button data-cmd="check" title="체크박스">☑ 체크</button>
+        <button data-cmd="link" title="링크">🔗 링크</button>
+        <button data-cmd="image" title="이미지">🖼 이미지</button>
+        <span class="tb-sep"></span>
+        <label class="link-date">📅 연결 <input type="date" id="memoLinkDate" /></label>
+        <input type="file" id="memoFile" accept="image/*" hidden />
+      </div>
+      <div class="memo-body" id="memoBody" contenteditable="true" data-ph="여기에 메모를 작성하세요…"></div>
+    </div>
+  </div>
+
+  <!-- 드래그 고스트 -->
+  <div class="drag-ghost" id="dragGhost"></div>
+
+  <!-- Supabase SDK (클라우드 동기화) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+  <script src="sync.js"></script>
+  <script>
+    // PWA 오프라인/설치 지원
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
+  </script>
+</body>
+</html>

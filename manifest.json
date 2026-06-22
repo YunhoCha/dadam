@@ -1,0 +1,14 @@
+{
+  "name": "다담 — 하루를 담다",
+  "short_name": "다담",
+  "description": "캘린더·할 일·마감·메모·일지를 한 곳에 담는 개인용 앱",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#eaf6ff",
+  "theme_color": "#bfe2ff",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
