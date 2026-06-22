@@ -228,13 +228,16 @@ function makeDayCell(c) {
 
 function makeChip(t, key) {
   const chip = document.createElement("div");
-  const firstCat = (t.categories || [])[0];
-  chip.className = `chip ${firstCat ? catClass(firstCat) : "c-sky"}` + (isDone(t, key) ? " done" : "");
+  const cats = (t.categories || []).map(catById).filter(Boolean);
+  chip.className = `chip ${cats[0] ? colorClass(cats[0].color) : "c-sky"}` + (isDone(t, key) ? " done" : "");
   const time = t.start ? `<b>${t.start}</b> ` : "";
   const star = t.star ? "★ " : "";
   const rec = t.recur ? " ↻" : "";
-  chip.innerHTML = `${star}${time}${escapeHtml(t.text) || "(빈 항목)"}${rec}`;
-  chip.title = (t.start ? t.start + " " : "") + (t.text || "");
+  const dots = cats.length
+    ? `<span class="chip-cats">${cats.map((c) => `<i class="cdot ${colorClass(c.color)}"></i>`).join("")}</span>`
+    : "";
+  chip.innerHTML = `${star}${time}${dots}${escapeHtml(t.text) || "(빈 항목)"}${rec}`;
+  chip.title = (t.start ? t.start + " " : "") + (t.text || "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
 
   if (!t.recur) {
     chip.draggable = true;
