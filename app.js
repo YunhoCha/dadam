@@ -190,6 +190,8 @@ function makeDayCell(c) {
   const num = document.createElement("div");
   num.className = "day-num"; num.textContent = c.d;
   top.appendChild(num);
+  const tools = document.createElement("div");
+  tools.className = "day-tools";
   // 연결된 메모 아이콘
   const linkedNotes = state.notes.filter((n) => n.linkDate === key);
   if (linkedNotes.length) {
@@ -202,8 +204,14 @@ function makeDayCell(c) {
       if (linkedNotes.length === 1) openMemo(linkedNotes[0].id);
       else showMemoMenu(e.currentTarget, linkedNotes);
     };
-    top.appendChild(mi);
+    tools.appendChild(mi);
   }
+  // 이 날에 할 일 추가
+  const add = document.createElement("button");
+  add.className = "day-add"; add.textContent = "＋"; add.title = "이 날에 할 일 추가";
+  add.onclick = (e) => { e.stopPropagation(); selectDate(key); switchToDayTab(); addBlock(); };
+  tools.appendChild(add);
+  top.appendChild(tools);
   el.appendChild(top);
 
   const chips = document.createElement("div");
@@ -236,8 +244,12 @@ function makeChip(t, key) {
   const dots = cats.length
     ? `<span class="chip-cats">${cats.map((c) => `<i class="cdot ${colorClass(c.color)}"></i>`).join("")}</span>`
     : "";
-  chip.innerHTML = `${star}${time}${dots}${escapeHtml(t.text) || "(빈 항목)"}${rec}`;
+  const noteIco = (t.note && t.note.trim()) ? `<span class="chip-note">📝</span>` : "";
+  chip.innerHTML = `${star}${time}${dots}${noteIco}${escapeHtml(t.text) || "(빈 항목)"}${rec}`;
   chip.title = (t.start ? t.start + " " : "") + (t.text || "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
+
+  // 클릭 → 작업 팝업(정보 + 노트)
+  chip.addEventListener("click", (e) => { e.stopPropagation(); showTaskPopup(chip, t, key); });
 
   if (!t.recur) {
     chip.draggable = true;
@@ -293,6 +305,77 @@ function showMemoMenu(anchor, notes) {
 }
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".memo-menu") && !e.target.closest(".memo-ind")) closeMemoMenu();
+});
+
+/* ============================================================
+   작업 팝업 — 칩 클릭 시 정보 + 노트 작성
+   ============================================================ */
+function closeTaskPopup(refresh) {
+  const p = document.getElementById("taskPopup");
+  if (!p) return;
+  p.remove();
+  if (refresh !== false) { renderCalendar(); renderDayPanel(); }   // 노트 아이콘 갱신
+}
+function showTaskPopup(anchor, t, key) {
+  closeTaskPopup(false);
+  const pop = document.createElement("div");
+  pop.className = "task-popup"; pop.id = "taskPopup";
+
+  const head = document.createElement("div");
+  head.className = "tpop-head";
+  const title = document.createElement("input");
+  title.className = "tpop-title"; title.value = t.text || ""; title.placeholder = "작업 이름";
+  title.oninput = () => { t.text = title.value; save(); };
+  const x = document.createElement("button");
+  x.className = "icon-btn sm"; x.textContent = "✕"; x.title = "닫기";
+  x.onclick = () => closeTaskPopup();
+  head.append(title, x);
+  pop.appendChild(head);
+
+  const meta = document.createElement("div");
+  meta.className = "tpop-meta";
+  if (t.start) meta.innerHTML += `<span class="m-time">🕘 ${t.start}${t.end ? "–" + t.end : ""}</span>`;
+  for (const cid of (t.categories || [])) {
+    const c = catById(cid);
+    if (c) meta.innerHTML += `<span class="m-cat ${colorClass(c.color)}"><i class="dot"></i>${escapeHtml(c.label)}</span>`;
+  }
+  if (t.recur) meta.innerHTML += `<span class="m-rec">↻ ${t.recur.freq === "biweekly" ? "격주" : "매주"}</span>`;
+  if (meta.innerHTML) pop.appendChild(meta);
+
+  const note = document.createElement("textarea");
+  note.className = "tpop-note"; note.placeholder = "이 작업에 대한 메모를 적어요…";
+  note.value = t.note || "";
+  note.oninput = () => { t.note = note.value; save(); };
+  pop.appendChild(note);
+
+  const act = document.createElement("div");
+  act.className = "tpop-act";
+  const doneBtn = document.createElement("button");
+  doneBtn.className = "mini-btn";
+  const setDoneLabel = () => { doneBtn.textContent = isDone(t, key) ? "✓ 완료됨" : "○ 완료"; doneBtn.classList.toggle("on", isDone(t, key)); };
+  setDoneLabel();
+  doneBtn.onclick = () => { toggleDone(t, key); save(); setDoneLabel(); };
+  const moreBtn = document.createElement("button");
+  moreBtn.className = "mini-btn"; moreBtn.textContent = "⚙ 상세";
+  moreBtn.onclick = () => { closeTaskPopup(); selectDate(key); openItemModal(t); };
+  const delBtn = document.createElement("button");
+  delBtn.className = "mini-btn danger"; delBtn.textContent = "🗑 삭제";
+  delBtn.onclick = () => { removeItem(t.id); closeTaskPopup(false); };
+  act.append(doneBtn, moreBtn, delBtn);
+  pop.appendChild(act);
+
+  document.body.appendChild(pop);
+  // 위치(화면 밖으로 안 나가게)
+  const r = anchor.getBoundingClientRect();
+  let left = Math.min(r.left, window.innerWidth - pop.offsetWidth - 12);
+  let top = r.bottom + 6;
+  if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
+  pop.style.left = Math.max(8, left) + "px";
+  pop.style.top = top + "px";
+  note.focus();
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".task-popup") && !e.target.closest(".chip")) closeTaskPopup();
 });
 
 /* 칩 → 날짜 이동 */
@@ -382,6 +465,7 @@ function makeBlock(t, key) {
     if (c) meta.innerHTML += `<span class="m-cat ${colorClass(c.color)}"><i class="dot"></i>${escapeHtml(c.label)}</span>`;
   }
   if (t.recur) meta.innerHTML += `<span class="m-rec">↻ ${t.recur.freq === "biweekly" ? "격주" : "매주"}</span>`;
+  if (t.note && t.note.trim()) meta.innerHTML += `<span class="m-note">📝 노트</span>`;
   if (meta.innerHTML) main.appendChild(meta);
   el.appendChild(main);
 
@@ -397,9 +481,15 @@ function makeBlock(t, key) {
   return el;
 }
 
+/* 우측 패널을 '일정·할 일' 탭으로 전환 */
+function switchToDayTab() {
+  document.querySelectorAll(".ptab").forEach((t) => t.classList.toggle("on", t.dataset.tab === "day"));
+  document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("on", p.dataset.pane === "day"));
+}
+
 function addBlock() {
   if (!selectedKey) selectDate(todayKey);
-  const it = { id: uid(), text: "", date: selectedKey, start: null, end: null, categories: [], star: false, done: false, doneDates: {}, recur: null };
+  const it = { id: uid(), text: "", date: selectedKey, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null };
   state.items.push(it);
   save(); renderDayPanel();
   requestAnimationFrame(() => {
@@ -428,6 +518,7 @@ function openItemModal(it) {
   $("itemRecur").value = it.recur ? it.recur.freq : "";
   $("itemUntil").value = it.recur && it.recur.until ? it.recur.until : "";
   $("recurUntilWrap").hidden = !it.recur;
+  $("itemNote").value = it.note || "";
   buildItemCats();
   $("itemModal").hidden = false;
 }
@@ -478,9 +569,11 @@ function persistItem() {
   const freq = $("itemRecur").value;
   if (freq) it.recur = { freq, until: $("itemUntil").value || null };
   else it.recur = null;
+  it.note = $("itemNote").value;
   save(); renderCalendar(); renderDayPanel();
 }
 $("itemText").addEventListener("input", persistItem);
+$("itemNote").addEventListener("input", persistItem);
 $("itemStart").addEventListener("input", persistItem);
 $("itemEnd").addEventListener("input", persistItem);
 $("itemStar").addEventListener("click", () => {
