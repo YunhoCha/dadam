@@ -273,9 +273,8 @@ function createRangeTask(aKey, bKey) {
   const it = { id: uid(), text: "", date: s, endDate: e !== s ? e : null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null };
   state.items.push(it);
   save(); renderCalendar(); selectDate(s);
-  // 시작일 칸에 팝업을 띄워 바로 이름 입력
-  const cell = grid.querySelector(`[data-key="${s}"]`);
-  if (cell) showTaskPopup(cell, it, s);
+  openItemModal(it);                                  // 상세 모달에서 이름·메모 입력
+  requestAnimationFrame(() => $("itemText").focus());
 }
 document.addEventListener("mouseup", () => {
   if (rangeStartKey == null) return;
@@ -315,8 +314,8 @@ function makeChip(t, key) {
   }
   chip.title = (t.text || "(빈 항목)") + (range ? ` · ${t.date.slice(5)}~${(t.endDate).slice(5)}` : "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
 
-  // 클릭 → 작업 팝업(정보 + 노트)
-  chip.addEventListener("click", (e) => { e.stopPropagation(); showTaskPopup(chip, t, key); });
+  // 클릭 → 상세 모달(메모 포함)
+  chip.addEventListener("click", (e) => { e.stopPropagation(); selectDate(key); openItemModal(t); });
 
   if (!t.recur && !range) {
     chip.draggable = true;
@@ -372,77 +371,6 @@ function showMemoMenu(anchor, notes) {
 }
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".memo-menu") && !e.target.closest(".memo-ind")) closeMemoMenu();
-});
-
-/* ============================================================
-   작업 팝업 — 칩 클릭 시 정보 + 노트 작성
-   ============================================================ */
-function closeTaskPopup(refresh) {
-  const p = document.getElementById("taskPopup");
-  if (!p) return;
-  p.remove();
-  if (refresh !== false) { renderCalendar(); renderDayPanel(); }   // 노트 아이콘 갱신
-}
-function showTaskPopup(anchor, t, key) {
-  closeTaskPopup(false);
-  const pop = document.createElement("div");
-  pop.className = "task-popup"; pop.id = "taskPopup";
-
-  const head = document.createElement("div");
-  head.className = "tpop-head";
-  const title = document.createElement("input");
-  title.className = "tpop-title"; title.value = t.text || ""; title.placeholder = "작업 이름";
-  title.oninput = () => { t.text = title.value; save(); };
-  const x = document.createElement("button");
-  x.className = "icon-btn sm"; x.textContent = "✕"; x.title = "닫기";
-  x.onclick = () => closeTaskPopup();
-  head.append(title, x);
-  pop.appendChild(head);
-
-  const meta = document.createElement("div");
-  meta.className = "tpop-meta";
-  if (t.start) meta.innerHTML += `<span class="m-time">🕘 ${t.start}${t.end ? "–" + t.end : ""}</span>`;
-  for (const cid of (t.categories || [])) {
-    const c = catById(cid);
-    if (c) meta.innerHTML += `<span class="m-cat ${colorClass(c.color)}"><i class="dot"></i>${escapeHtml(c.label)}</span>`;
-  }
-  if (t.recur) meta.innerHTML += `<span class="m-rec">↻ ${t.recur.freq === "biweekly" ? "격주" : "매주"}</span>`;
-  if (meta.innerHTML) pop.appendChild(meta);
-
-  const note = document.createElement("textarea");
-  note.className = "tpop-note"; note.placeholder = "이 작업에 대한 메모를 적어요…";
-  note.value = t.note || "";
-  note.oninput = () => { t.note = note.value; save(); };
-  pop.appendChild(note);
-
-  const act = document.createElement("div");
-  act.className = "tpop-act";
-  const doneBtn = document.createElement("button");
-  doneBtn.className = "mini-btn";
-  const setDoneLabel = () => { doneBtn.textContent = isDone(t, key) ? "✓ 완료됨" : "○ 완료"; doneBtn.classList.toggle("on", isDone(t, key)); };
-  setDoneLabel();
-  doneBtn.onclick = () => { toggleDone(t, key); save(); setDoneLabel(); };
-  const moreBtn = document.createElement("button");
-  moreBtn.className = "mini-btn"; moreBtn.textContent = "⚙ 상세";
-  moreBtn.onclick = () => { closeTaskPopup(); selectDate(key); openItemModal(t); };
-  const delBtn = document.createElement("button");
-  delBtn.className = "mini-btn danger"; delBtn.textContent = "🗑 삭제";
-  delBtn.onclick = () => { removeItem(t.id); closeTaskPopup(false); };
-  act.append(doneBtn, moreBtn, delBtn);
-  pop.appendChild(act);
-
-  document.body.appendChild(pop);
-  // 위치(화면 밖으로 안 나가게)
-  const r = anchor.getBoundingClientRect();
-  let left = Math.min(r.left, window.innerWidth - pop.offsetWidth - 12);
-  let top = r.bottom + 6;
-  if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
-  pop.style.left = Math.max(8, left) + "px";
-  pop.style.top = top + "px";
-  (t.text ? note : title).focus();   // 새 작업이면 제목부터
-}
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".task-popup") && !e.target.closest(".chip")) closeTaskPopup();
 });
 
 /* 칩 → 날짜 이동 */
