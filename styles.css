@@ -149,6 +149,7 @@ body {
   background:var(--white); border-radius:13px; padding:7px 9px; border:1.5px solid transparent;
   display:flex; flex-direction:column; gap:4px; cursor:pointer; overflow:hidden; position:relative;
   box-shadow:var(--shadow-sm); transition:transform .14s, box-shadow .14s, border-color .14s;
+  user-select:none;
 }
 .day:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); }
 .day.is-outside { background:rgba(255,255,255,.45); }
@@ -232,6 +233,14 @@ body {
 .chip:active { cursor:grabbing; }
 .chip.done { opacity:.5; text-decoration:line-through; }
 .chip.dragging { opacity:.35; }
+
+/* 기간(여러 날) 작업 — 연결된 바 */
+.range-chip { border-radius:0; border-left:none; background:var(--t); color:var(--d); cursor:pointer; min-height:18px; }
+.range-chip.r-start { border-top-left-radius:7px; border-bottom-left-radius:7px; border-left:3px solid var(--c); }
+.range-chip.r-end { border-top-right-radius:7px; border-bottom-right-radius:7px; }
+
+/* 날짜 범위 드래그 선택 하이라이트 */
+.day.range-sel { background:var(--sky-100); border-color:var(--sky-400); }
 .day-more { font-size:10px; color:var(--ink-mute); padding-left:4px; }
 
 /* ============ 우측 패널 ============ */

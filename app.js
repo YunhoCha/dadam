@@ -92,14 +92,19 @@ const tpDate = $("tpDate"), tpEyebrow = $("tpEyebrow"), dragGhost = $("dragGhost
    아이템(일정/할 일) 헬퍼 — 반복 포함
    ============================================================ */
 function occursOn(it, key) {
-  if (!it.recur) return it.date === key;
-  if (key < it.date) return false;
-  if (it.recur.until && key > it.recur.until) return false;
-  if (parseKey(key).getDay() !== parseKey(it.date).getDay()) return false;
-  const weeks = Math.round(daysBetween(it.date, key) / 7);
-  const interval = it.recur.freq === "biweekly" ? 2 : 1;
-  return weeks % interval === 0;
+  if (it.recur) {
+    if (key < it.date) return false;
+    if (it.recur.until && key > it.recur.until) return false;
+    if (parseKey(key).getDay() !== parseKey(it.date).getDay()) return false;
+    const weeks = Math.round(daysBetween(it.date, key) / 7);
+    const interval = it.recur.freq === "biweekly" ? 2 : 1;
+    return weeks % interval === 0;
+  }
+  // 비반복: 단일 날짜 또는 기간(endDate까지). 날짜 문자열은 사전식 비교로 충분
+  const end = it.endDate || it.date;
+  return key >= it.date && key <= end;
 }
+const isRange = (it) => !!(it.endDate && it.endDate !== it.date);
 function isDone(it, key) { return it.recur ? !!(it.doneDates && it.doneDates[key]) : it.done; }
 function toggleDone(it, key) {
   if (it.recur) { it.doneDates ||= {}; it.doneDates[key] = !it.doneDates[key]; }
@@ -113,6 +118,7 @@ function passFilter(it) {
 function itemsForDate(key) {
   const res = state.items.filter((it) => occursOn(it, key) && passFilter(it));
   res.sort((a, b) => {
+    if (isRange(a) !== isRange(b)) return isRange(a) ? -1 : 1;  // 기간 작업 먼저(위로)
     if (!!b.star - !!a.star) return !!b.star - !!a.star;     // 별표 먼저
     const at = a.start || "99:99", bt = b.start || "99:99";   // 시간순(없으면 뒤로)
     if (at !== bt) return at < bt ? -1 : 1;
@@ -229,15 +235,71 @@ function makeDayCell(c) {
   }
   el.appendChild(chips);
 
-  el.addEventListener("click", (e) => { if (e.target.closest(".chip")) return; selectDate(key); });
+  el.addEventListener("click", (e) => {
+    if (e.target.closest(".chip")) return;
+    if (suppressDayClick) { suppressDayClick = false; return; }   // 기간 드래그 직후 클릭 무시
+    selectDate(key);
+  });
+  // 빈 영역 드래그 → 기간 선택
+  el.addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || e.target.closest(".chip") || e.target.closest("button") || e.target.closest(".memo-ind")) return;
+    rangeStartKey = key; rangeEndKey = key; rangeMoved = false;
+    e.preventDefault();   // 텍스트 선택 방지
+  });
+  el.addEventListener("mouseenter", () => {
+    if (rangeStartKey == null) return;
+    rangeEndKey = key;
+    if (key !== rangeStartKey) rangeMoved = true;
+    highlightRange(rangeStartKey, key);
+  });
   setupDropTarget(el, key);
   return el;
 }
 
+/* ---------- 날짜 범위 드래그(기간 작업 만들기) ---------- */
+let rangeStartKey = null, rangeEndKey = null, rangeMoved = false, suppressDayClick = false;
+function highlightRange(aKey, bKey) {
+  const [s, e] = [aKey, bKey].sort();
+  document.querySelectorAll(".day").forEach((d) => {
+    const k = d.dataset.key;
+    d.classList.toggle("range-sel", k >= s && k <= e);
+  });
+}
+function clearRangeHighlight() {
+  document.querySelectorAll(".day.range-sel").forEach((d) => d.classList.remove("range-sel"));
+}
+function createRangeTask(aKey, bKey) {
+  const [s, e] = [aKey, bKey].sort();
+  const it = { id: uid(), text: "", date: s, endDate: e !== s ? e : null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null };
+  state.items.push(it);
+  save(); renderCalendar(); selectDate(s);
+  // 시작일 칸에 팝업을 띄워 바로 이름 입력
+  const cell = grid.querySelector(`[data-key="${s}"]`);
+  if (cell) showTaskPopup(cell, it, s);
+}
+document.addEventListener("mouseup", () => {
+  if (rangeStartKey == null) return;
+  const s = rangeStartKey, e = rangeEndKey;
+  rangeStartKey = null; rangeEndKey = null;
+  clearRangeHighlight();
+  if (rangeMoved && e && e !== s) {
+    suppressDayClick = true;
+    createRangeTask(s, e);
+    setTimeout(() => { suppressDayClick = false; }, 0);   // 혹시 안 쓰이면 자동 해제
+  }
+  rangeMoved = false;
+});
+
 function makeChip(t, key) {
   const chip = document.createElement("div");
   const cats = (t.categories || []).map(catById).filter(Boolean);
-  chip.className = `chip ${cats[0] ? colorClass(cats[0].color) : "c-sky"}` + (isDone(t, key) ? " done" : "");
+  const range = isRange(t);
+  const isStart = key === t.date;
+  const isEnd = key === (t.endDate || t.date);
+  const weekStart = parseKey(key).getDay() === 0;
+  let cls = `chip ${cats[0] ? colorClass(cats[0].color) : "c-sky"}` + (isDone(t, key) ? " done" : "");
+  if (range) cls += " range-chip" + (isStart ? " r-start" : "") + (isEnd ? " r-end" : "");
+  chip.className = cls;
   const time = t.start ? `<b>${t.start}</b> ` : "";
   const star = t.star ? "★ " : "";
   const rec = t.recur ? " ↻" : "";
@@ -245,13 +307,18 @@ function makeChip(t, key) {
     ? `<span class="chip-cats">${cats.map((c) => `<i class="cdot ${colorClass(c.color)}"></i>`).join("")}</span>`
     : "";
   const noteIco = (t.note && t.note.trim()) ? `<span class="chip-note">📝</span>` : "";
-  chip.innerHTML = `${star}${time}${dots}${noteIco}${escapeHtml(t.text) || "(빈 항목)"}${rec}`;
-  chip.title = (t.start ? t.start + " " : "") + (t.text || "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
+  // 기간 작업: 시작일·주 시작일에만 라벨, 나머지 날은 연속 바
+  if (range && !isStart && !weekStart) {
+    chip.innerHTML = `&nbsp;`;
+  } else {
+    chip.innerHTML = `${star}${time}${dots}${noteIco}${escapeHtml(t.text) || "(빈 항목)"}${rec}`;
+  }
+  chip.title = (t.text || "(빈 항목)") + (range ? ` · ${t.date.slice(5)}~${(t.endDate).slice(5)}` : "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
 
   // 클릭 → 작업 팝업(정보 + 노트)
   chip.addEventListener("click", (e) => { e.stopPropagation(); showTaskPopup(chip, t, key); });
 
-  if (!t.recur) {
+  if (!t.recur && !range) {
     chip.draggable = true;
     chip.dataset.id = t.id;
     chip.addEventListener("dragstart", (e) => {
@@ -372,7 +439,7 @@ function showTaskPopup(anchor, t, key) {
   if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
   pop.style.left = Math.max(8, left) + "px";
   pop.style.top = top + "px";
-  note.focus();
+  (t.text ? note : title).focus();   // 새 작업이면 제목부터
 }
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".task-popup") && !e.target.closest(".chip")) closeTaskPopup();
@@ -511,6 +578,8 @@ let editingItem = null;
 function openItemModal(it) {
   editingItem = it;
   $("itemText").value = it.text || "";
+  $("itemDate").value = it.date || todayKey;
+  $("itemEndDate").value = it.endDate || "";
   $("itemStart").value = it.start || "";
   $("itemEnd").value = it.end || "";
   $("itemStar").className = "star-toggle" + (it.star ? " on" : "");
@@ -564,6 +633,9 @@ function renderCatChoose(wrap, current, onPick) {
 function persistItem() {
   const it = editingItem; if (!it) return;
   it.text = $("itemText").value;
+  if ($("itemDate").value) it.date = $("itemDate").value;
+  const ed = $("itemEndDate").value;
+  it.endDate = ed && ed > it.date ? ed : null;   // 종료일이 시작일보다 뒤일 때만 기간으로
   it.start = $("itemStart").value || null;
   it.end = $("itemEnd").value || null;
   const freq = $("itemRecur").value;
@@ -573,6 +645,8 @@ function persistItem() {
   save(); renderCalendar(); renderDayPanel();
 }
 $("itemText").addEventListener("input", persistItem);
+$("itemDate").addEventListener("input", persistItem);
+$("itemEndDate").addEventListener("input", persistItem);
 $("itemNote").addEventListener("input", persistItem);
 $("itemStart").addEventListener("input", persistItem);
 $("itemEnd").addEventListener("input", persistItem);
