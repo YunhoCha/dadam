@@ -27,6 +27,7 @@
           <button class="icon-btn" id="prevBtn" aria-label="이전 달">‹</button>
           <button class="icon-btn" id="nextBtn" aria-label="다음 달">›</button>
           <h2 id="monthLabel">2026년 6월</h2>
+          <button class="icon-btn" id="backupBtn" title="데이터 백업 / 복원">💾</button>
         </div>
         <div class="global-search">
           <input type="text" id="globalSearch" placeholder="🔍 전체 검색 (일정·할 일·메모)" autocomplete="off" />
@@ -195,6 +196,22 @@
         <input type="file" id="memoFile" accept="image/*" hidden />
       </div>
       <div class="memo-body" id="memoBody" contenteditable="true" data-ph="여기에 메모를 작성하세요…"></div>
+    </div>
+  </div>
+
+  <!-- ===== 백업 / 복원 모달 ===== -->
+  <div class="modal" id="backupModal" hidden>
+    <div class="modal-backdrop" data-close="backupModal"></div>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <span class="modal-title-txt">💾 데이터 백업 / 복원</span>
+        <button class="icon-btn sm" data-close="backupModal" title="닫기">✕</button>
+      </div>
+      <p class="backup-desc">모든 데이터(일정·할 일·마감·메모·일지)를 <b>JSON 파일</b>로 저장하거나, 백업 파일에서 되돌립니다.</p>
+      <button class="ghost-btn block-btn" id="exportBtn">⬇ JSON으로 내보내기 (백업)</button>
+      <button class="ghost-btn block-btn" id="importBtn">⬆ JSON에서 가져오기 (복원)</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden />
+      <p class="backup-msg" id="backupMsg"></p>
     </div>
   </div>
 

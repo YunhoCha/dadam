@@ -58,6 +58,12 @@ body {
 .sync-dot[data-state="err"]   { background:#e0566f; }                /* 오류 */
 .sync-dot[data-state="off"]   { background:var(--sky-300); }         /* 로그아웃 */
 @keyframes syncPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* 백업/복원 모달 */
+.backup-desc { font-size:13px; color:var(--ink-soft); line-height:1.6; margin:0 0 16px; }
+.block-btn { width:100%; justify-content:center; margin-bottom:10px; }
+.backup-msg { font-size:12.5px; color:var(--sky-700); text-align:center; margin:12px 0 0; min-height:1em; }
+.backup-msg.err { color:#e0566f; }
 .icon-btn {
   width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:var(--white);
   color:var(--ink-soft); font-size:18px; cursor:pointer; transition:.18s; line-height:1; flex-shrink:0;

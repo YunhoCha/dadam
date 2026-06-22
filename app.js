@@ -734,6 +734,57 @@ function seedIfEmpty() {
   }
 }
 
+/* ============================================================
+   백업 / 복원 — JSON 내보내기·가져오기
+   ============================================================ */
+function exportData() {
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `다담-백업-${todayKey}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  backupMsg("✅ 백업 파일을 내려받았습니다.");
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try { parsed = JSON.parse(reader.result); }
+    catch { backupMsg("❌ JSON 파일을 읽을 수 없습니다.", true); return; }
+    // 최소한의 형식 검증
+    if (!parsed || typeof parsed !== "object" || !("items" in parsed) || !("notes" in parsed)) {
+      backupMsg("❌ 다담 백업 파일이 아닌 것 같습니다.", true); return;
+    }
+    const cnt = (parsed.items?.length || 0) + (parsed.deadlines?.length || 0) + (parsed.notes?.length || 0);
+    if (!confirm(`현재 데이터를 이 백업으로 덮어씁니다.\n(일정·할일·마감·메모 약 ${cnt}건)\n계속할까요?`)) return;
+
+    window.Dadam.replaceState(parsed);  // 화면 교체 + localStorage 기록
+    save();                             // _updatedAt 갱신 + 클라우드 푸시(로그인 시)
+    backupMsg("✅ 복원 완료. 모든 기기에 반영됩니다.");
+  };
+  reader.readAsText(file);
+}
+
+function backupMsg(text, isErr) {
+  const el = $("backupMsg");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("err", !!isErr);
+}
+
+$("backupBtn").addEventListener("click", () => { backupMsg(""); $("backupModal").hidden = false; });
+$("exportBtn").addEventListener("click", exportData);
+$("importBtn").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (f) importData(f);
+  e.target.value = "";  // 같은 파일 다시 선택 가능하게
+});
+
 /* 전체 화면 다시 그리기 — 클라우드에서 데이터를 받아온 뒤에도 호출 */
 function renderAll() {
   renderCatFilter();
