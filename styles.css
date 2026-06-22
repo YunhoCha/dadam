@@ -20,7 +20,7 @@ body {
   min-height:100vh; overflow-x:hidden; overflow-y:auto;
 }
 .app {
-  display:grid; grid-template-columns:minmax(0,1fr) 390px;
+  display:grid; grid-template-columns:minmax(0,1fr) 460px;
   grid-template-rows:minmax(100vh,auto); min-height:100vh; gap:0;
 }
 
@@ -30,6 +30,11 @@ body {
 .c-lilac { --c:#7c63e0; --t:#efebfd; --d:#6b54c2; }
 .c-coral { --c:#ef6f59; --t:#ffeae6; --d:#c2543f; }
 .c-sun   { --c:#e0a82e; --t:#fff5da; --d:#b8893a; }
+.c-rose  { --c:#ec5a8d; --t:#fde6ef; --d:#c43c6e; }
+.c-grass { --c:#5bb15b; --t:#e7f6e3; --d:#3f8b3f; }
+.c-ocean { --c:#2a9db5; --t:#e0f5f9; --d:#1f7d92; }
+.c-grape { --c:#9b53c9; --t:#f4e8fb; --d:#7d3ca8; }
+.c-slate { --c:#6b7f99; --t:#eef2f7; --d:#52647c; }
 
 /* ============ 헤더 ============ */
 .main { padding:24px 26px; display:flex; flex-direction:column; min-width:0; }
@@ -64,6 +69,25 @@ body {
 .block-btn { width:100%; justify-content:center; margin-bottom:10px; }
 .backup-msg { font-size:12.5px; color:var(--sky-700); text-align:center; margin:12px 0 0; min-height:1em; }
 .backup-msg.err { color:#e0566f; }
+
+/* 카테고리 설정 모달 */
+.cat-empty { font-size:12.5px; color:var(--ink-mute); padding:6px 0 12px; }
+.cat-settings-list { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; max-height:50vh; overflow:auto; }
+.cat-set-row { display:flex; align-items:center; gap:8px; }
+.cat-name-input {
+  flex:1; min-width:0; border:1px solid var(--line); border-radius:9px;
+  padding:7px 10px; font-family:inherit; font-size:13px; color:var(--ink); outline:none; transition:.15s;
+}
+.cat-name-input:focus { border-color:var(--sky-400); box-shadow:0 0 0 3px var(--sky-100); }
+.cat-swatches { display:flex; gap:4px; flex-wrap:wrap; width:124px; flex-shrink:0; }
+.cat-sw {
+  width:17px; height:17px; border-radius:50%; border:none; padding:0; cursor:pointer;
+  background:var(--c,var(--sky-400)); transition:transform .12s, box-shadow .12s;
+}
+.cat-sw:hover { transform:scale(1.18); }
+.cat-sw.on { box-shadow:0 0 0 2px #fff, 0 0 0 3px var(--ink-soft); }
+.cat-del { border:none; background:transparent; cursor:pointer; font-size:14px; padding:4px 5px; border-radius:7px; flex-shrink:0; transition:.14s; }
+.cat-del:hover { background:#ffe3e3; }
 .icon-btn {
   width:34px; height:34px; border-radius:10px; border:1px solid var(--line); background:var(--white);
   color:var(--ink-soft); font-size:18px; cursor:pointer; transition:.18s; line-height:1; flex-shrink:0;
@@ -93,7 +117,21 @@ body {
 .sr-empty { padding:14px; text-align:center; color:var(--ink-mute); font-size:13px; }
 
 /* 카테고리 필터 */
-.cat-filter { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+/* 캘린더 본문 = [카테고리 범례 | 달력] */
+.cal-body { display:flex; gap:16px; flex:1; min-height:0; }
+.cal-area { flex:1; display:flex; flex-direction:column; min-width:0; }
+.cat-legend {
+  width:132px; flex-shrink:0; display:flex; flex-direction:column; gap:6px;
+  align-self:flex-start; position:sticky; top:0;
+}
+.legend-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:2px; }
+.legend-head span { font-size:11px; font-weight:700; color:var(--ink-mute); letter-spacing:.02em; }
+.legend-gear {
+  border:none; background:transparent; cursor:pointer; font-size:14px; line-height:1;
+  padding:3px; border-radius:7px; color:var(--ink-soft); transition:.14s;
+}
+.legend-gear:hover { background:var(--sky-100); transform:rotate(30deg); }
+.cat-legend .fchip { width:100%; justify-content:flex-start; }
 .fchip {
   display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:20px;
   border:1px solid var(--line); background:var(--white); color:var(--ink-soft);
@@ -376,8 +414,9 @@ body {
 
 /* ============ 반응형 ============ */
 @media (max-width:1120px) {
-  .app { grid-template-columns:minmax(0,1fr) 340px; }
+  .app { grid-template-columns:minmax(0,1fr) 400px; }
   .main { padding:20px 18px; }
+  .cat-legend { width:112px; }
 }
 @media (max-width:860px) {
   body { overflow-y:auto; }
@@ -386,6 +425,11 @@ body {
   .side-panel { border-left:none; border-top:1px solid var(--line); height:auto; }
   .tab-pane.on { overflow:visible; }
   .block-list, .memo-list { max-height:none; }
+  /* 좁은 화면: 범례를 달력 위에 가로로 */
+  .cal-body { flex-direction:column; gap:10px; }
+  .cat-legend { width:100%; flex-direction:row; flex-wrap:wrap; align-items:center; position:static; gap:6px; }
+  .legend-head { width:100%; margin-bottom:0; }
+  .cat-legend .fchip { width:auto; }
 }
 @media (max-width:560px) {
   .cal-title h2 { font-size:19px; }

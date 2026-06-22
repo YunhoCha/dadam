@@ -35,13 +35,16 @@
         </div>
       </header>
 
-      <div class="cat-filter" id="catFilter"></div>
-
-      <div class="weekday-row">
-        <span class="sun">일</span><span>월</span><span>화</span><span>수</span>
-        <span>목</span><span>금</span><span class="sat">토</span>
+      <div class="cal-body">
+        <aside class="cat-legend" id="catFilter"></aside>
+        <div class="cal-area">
+          <div class="weekday-row">
+            <span class="sun">일</span><span>월</span><span>화</span><span>수</span>
+            <span>목</span><span>금</span><span class="sat">토</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
       </div>
-      <div class="calendar-grid" id="calendarGrid"></div>
     </main>
 
     <!-- 우측 패널 -->
@@ -212,6 +215,20 @@
       <button class="ghost-btn block-btn" id="importBtn">⬆ JSON에서 가져오기 (복원)</button>
       <input type="file" id="importFile" accept="application/json,.json" hidden />
       <p class="backup-msg" id="backupMsg"></p>
+    </div>
+  </div>
+
+  <!-- ===== 카테고리 설정 모달 ===== -->
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-backdrop" data-close="settingsModal"></div>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <span class="modal-title-txt">⚙ 카테고리 설정</span>
+        <button class="icon-btn sm" data-close="settingsModal" title="닫기">✕</button>
+      </div>
+      <p class="backup-desc">할 일에 붙일 카테고리를 추가·수정·삭제하세요. 색을 누르면 바뀝니다. 할 일에는 <b>여러 개</b> 지정할 수 있어요.</p>
+      <div class="cat-settings-list" id="catSettingsList"></div>
+      <button class="ghost-btn block-btn" id="addCatBtn">＋ 카테고리 추가</button>
     </div>
   </div>
 

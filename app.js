@@ -5,16 +5,19 @@
 
 const STORE_KEY = "dadam.v2";
 
-/* ---------- 카테고리 ---------- */
-const CATS = {
-  class:    { label: "수업",   cls: "c-sky"   },
-  seminar:  { label: "세미나", cls: "c-mint"  },
-  meeting:  { label: "미팅",   cls: "c-lilac" },
-  personal: { label: "개인",   cls: "c-coral" },
-  etc:      { label: "기타",   cls: "c-sun"   },
-};
-const CAT_KEYS = Object.keys(CATS);
-const catCls = (c) => (CATS[c] ? CATS[c].cls : "c-sky");
+/* ---------- 카테고리 (사용자 설정 가능, state.categories에 저장) ----------
+   - 색 팔레트에서 골라 쓰고, 할 일에는 '태그'처럼 여러 개 지정 가능 */
+const PALETTE = ["sky", "mint", "lilac", "coral", "sun", "rose", "grass", "ocean", "grape", "slate"];
+const DEFAULT_CATS = [
+  { id: "class",    label: "수업",   color: "sky"   },
+  { id: "seminar",  label: "세미나", color: "mint"  },
+  { id: "meeting",  label: "미팅",   color: "lilac" },
+  { id: "personal", label: "개인",   color: "coral" },
+  { id: "etc",      label: "기타",   color: "sun"   },
+];
+const colorClass = (color) => "c-" + (PALETTE.includes(color) ? color : "sky");
+const catById = (id) => (state.categories || []).find((c) => c.id === id) || null;
+const catClass = (id) => { const c = catById(id); return c ? colorClass(c.color) : "c-sky"; };
 
 /* ---------- 상태 ----------
    items:     [{id,text,date,start,end,category,star,done,doneDates,recur}]
@@ -23,10 +26,21 @@ const catCls = (c) => (CATS[c] ? CATS[c].cls : "c-sky");
    journals:  { "YYYY-MM-DD": {mood:0-5, text} }
 ------------------------------- */
 let state = load() || migrate() || { items: [], deadlines: [], notes: [], journals: {} };
-state.items     ||= [];
-state.deadlines ||= [];
-state.notes     ||= [];
-state.journals  ||= {};
+/* 상태 정규화 — 초기 로드와 클라우드 수신 양쪽에서 호출.
+   옛 형식(단일 category, categories 없음)을 새 형식으로 안전하게 변환 */
+function normalizeState(s) {
+  s.items      ||= [];
+  s.deadlines  ||= [];
+  s.notes      ||= [];
+  s.journals   ||= {};
+  s.categories ||= DEFAULT_CATS.map((c) => ({ ...c }));
+  for (const it of s.items) {
+    if (!Array.isArray(it.categories)) it.categories = it.category != null ? [it.category] : [];
+    delete it.category;
+  }
+  return s;
+}
+normalizeState(state);
 
 let viewYear, viewMonth, selectedKey = null;
 let activeCats = new Set();            // 비어있으면 전체 표시
@@ -91,7 +105,10 @@ function toggleDone(it, key) {
   if (it.recur) { it.doneDates ||= {}; it.doneDates[key] = !it.doneDates[key]; }
   else it.done = !it.done;
 }
-function passFilter(it) { return activeCats.size === 0 || activeCats.has(it.category); }
+function passFilter(it) {
+  if (activeCats.size === 0) return true;
+  return (it.categories || []).some((c) => activeCats.has(c));
+}
 
 function itemsForDate(key) {
   const res = state.items.filter((it) => occursOn(it, key) && passFilter(it));
@@ -110,17 +127,27 @@ function itemsForDate(key) {
 function renderCatFilter() {
   const wrap = $("catFilter");
   wrap.innerHTML = "";
+  const head = document.createElement("div");
+  head.className = "legend-head";
+  head.innerHTML = `<span>카테고리</span>`;
+  const gear = document.createElement("button");
+  gear.className = "legend-gear"; gear.textContent = "⚙"; gear.title = "카테고리 설정";
+  gear.onclick = () => openSettings();
+  head.appendChild(gear);
+  wrap.appendChild(head);
+
   const all = document.createElement("button");
   all.className = "fchip" + (activeCats.size === 0 ? " on" : "");
-  all.textContent = "전체";
+  all.textContent = "전체 보기";
   all.onclick = () => { activeCats.clear(); renderCatFilter(); renderCalendar(); renderDayPanel(); };
   wrap.appendChild(all);
-  for (const k of CAT_KEYS) {
+
+  for (const cat of state.categories) {
     const b = document.createElement("button");
-    b.className = `fchip ${CATS[k].cls}` + (activeCats.has(k) ? " on" : "");
-    b.innerHTML = `<i class="dot"></i>${CATS[k].label}`;
+    b.className = `fchip ${colorClass(cat.color)}` + (activeCats.has(cat.id) ? " on" : "");
+    b.innerHTML = `<i class="dot"></i>${escapeHtml(cat.label) || "(이름 없음)"}`;
     b.onclick = () => {
-      activeCats.has(k) ? activeCats.delete(k) : activeCats.add(k);
+      activeCats.has(cat.id) ? activeCats.delete(cat.id) : activeCats.add(cat.id);
       renderCatFilter(); renderCalendar(); renderDayPanel();
     };
     wrap.appendChild(b);
@@ -144,7 +171,8 @@ function renderCalendar() {
   for (let i = startDow - 1; i >= 0; i--) cells.push({ y: pm.y, m: pm.m, d: daysInPrev - i, outside: true });
   for (let d = 1; d <= daysInMonth; d++) cells.push({ y: viewYear, m: viewMonth, d, outside: false });
   let nd = 1;
-  while (cells.length % 7 !== 0 || cells.length < 42) { cells.push({ y: nm.y, m: nm.m, d: nd++, outside: true }); if (cells.length >= 42) break; }
+  // 마지막 주만 채움 → 보통 5주(필요한 달은 6주). 6주 고정보다 세로로 짧게
+  while (cells.length % 7 !== 0) cells.push({ y: nm.y, m: nm.m, d: nd++, outside: true });
   for (const c of cells) grid.appendChild(makeDayCell(c));
 }
 
@@ -200,7 +228,8 @@ function makeDayCell(c) {
 
 function makeChip(t, key) {
   const chip = document.createElement("div");
-  chip.className = `chip ${catCls(t.category)}` + (isDone(t, key) ? " done" : "");
+  const firstCat = (t.categories || [])[0];
+  chip.className = `chip ${firstCat ? catClass(firstCat) : "c-sky"}` + (isDone(t, key) ? " done" : "");
   const time = t.start ? `<b>${t.start}</b> ` : "";
   const star = t.star ? "★ " : "";
   const rec = t.recur ? " ↻" : "";
@@ -229,7 +258,7 @@ function makeChip(t, key) {
 
 function makeDeadlineChip(d) {
   const chip = document.createElement("div");
-  chip.className = `chip dl-chip ${catCls(d.category)}`;
+  chip.className = `chip dl-chip ${catClass(d.category)}`;
   const dd = daysBetween(todayKey, d.date);
   const ddText = dd === 0 ? "D-DAY" : dd > 0 ? `D-${dd}` : `D+${-dd}`;
   chip.innerHTML = `<span class="dl-tag">⏰${ddText}</span> ${escapeHtml(d.title) || "마감"}`;
@@ -345,7 +374,10 @@ function makeBlock(t, key) {
   const meta = document.createElement("div");
   meta.className = "block-meta";
   if (t.start) meta.innerHTML += `<span class="m-time">🕘 ${t.start}${t.end ? "–" + t.end : ""}</span>`;
-  if (t.category) meta.innerHTML += `<span class="m-cat ${catCls(t.category)}"><i class="dot"></i>${CATS[t.category].label}</span>`;
+  for (const cid of (t.categories || [])) {
+    const c = catById(cid);
+    if (c) meta.innerHTML += `<span class="m-cat ${colorClass(c.color)}"><i class="dot"></i>${escapeHtml(c.label)}</span>`;
+  }
   if (t.recur) meta.innerHTML += `<span class="m-rec">↻ ${t.recur.freq === "biweekly" ? "격주" : "매주"}</span>`;
   if (meta.innerHTML) main.appendChild(meta);
   el.appendChild(main);
@@ -364,7 +396,7 @@ function makeBlock(t, key) {
 
 function addBlock() {
   if (!selectedKey) selectDate(todayKey);
-  const it = { id: uid(), text: "", date: selectedKey, start: null, end: null, category: null, star: false, done: false, doneDates: {}, recur: null };
+  const it = { id: uid(), text: "", date: selectedKey, start: null, end: null, categories: [], star: false, done: false, doneDates: {}, recur: null };
   state.items.push(it);
   save(); renderDayPanel();
   requestAnimationFrame(() => {
@@ -396,11 +428,30 @@ function openItemModal(it) {
   buildItemCats();
   $("itemModal").hidden = false;
 }
+/* 할 일: 카테고리를 태그처럼 여러 개 토글 */
 function buildItemCats() {
-  renderCatChoose($("itemCats"), editingItem.category, (c) => {
-    editingItem.category = c; persistItem(); buildItemCats();
-  });
+  const wrap = $("itemCats");
+  wrap.innerHTML = "";
+  if (state.categories.length === 0) {
+    wrap.innerHTML = `<span class="cat-empty">설정(⚙)에서 카테고리를 먼저 만들어요.</span>`;
+    return;
+  }
+  editingItem.categories ||= [];
+  for (const cat of state.categories) {
+    const on = editingItem.categories.includes(cat.id);
+    const b = document.createElement("button");
+    b.className = `cat-opt ${colorClass(cat.color)}` + (on ? " on" : "");
+    b.innerHTML = `<i class="dot"></i>${escapeHtml(cat.label)}`;
+    b.onclick = () => {
+      const i = editingItem.categories.indexOf(cat.id);
+      if (i >= 0) editingItem.categories.splice(i, 1); else editingItem.categories.push(cat.id);
+      persistItem(); buildItemCats();
+    };
+    wrap.appendChild(b);
+  }
 }
+
+/* 마감: 카테고리 하나만 선택(단일) */
 function renderCatChoose(wrap, current, onPick) {
   wrap.innerHTML = "";
   const none = document.createElement("button");
@@ -408,11 +459,11 @@ function renderCatChoose(wrap, current, onPick) {
   none.textContent = "없음";
   none.onclick = () => onPick(null);
   wrap.appendChild(none);
-  for (const k of CAT_KEYS) {
+  for (const cat of state.categories) {
     const b = document.createElement("button");
-    b.className = `cat-opt ${CATS[k].cls}` + (current === k ? " on" : "");
-    b.innerHTML = `<i class="dot"></i>${CATS[k].label}`;
-    b.onclick = () => onPick(k);
+    b.className = `cat-opt ${colorClass(cat.color)}` + (current === cat.id ? " on" : "");
+    b.innerHTML = `<i class="dot"></i>${escapeHtml(cat.label)}`;
+    b.onclick = () => onPick(cat.id);
     wrap.appendChild(b);
   }
 }
@@ -464,7 +515,7 @@ function renderDeadlines() {
     const card = document.createElement("div");
     card.className = "dl-card" + (urgent ? " urgent" : "") + (d.dd < 0 ? " over" : "");
     card.innerHTML =
-      `<div class="dl-dday ${catCls(d.category)}">${ddText}</div>` +
+      `<div class="dl-dday ${catClass(d.category)}">${ddText}</div>` +
       `<div class="dl-body"><div class="dl-title">${escapeHtml(d.title) || "제목 없음"}</div>` +
       `<div class="dl-sub">${prettyDate(d.date)}${total ? ` · 단계 ${done}/${total}` : ""}</div></div>`;
     card.onclick = () => openDeadlineModal(d);
@@ -723,8 +774,8 @@ document.addEventListener("keydown", (e) => {
 function seedIfEmpty() {
   if (state.items.length === 0 && state.deadlines.length === 0 && state.notes.length === 0) {
     state.items.push(
-      { id: uid(), text: "랩미팅", date: todayKey, start: "14:00", end: "15:00", category: "meeting", star: true, done: false, doneDates: {}, recur: { freq: "weekly", until: null } },
-      { id: uid(), text: "논문 읽기", date: todayKey, start: null, end: null, category: "personal", star: false, done: false, doneDates: {}, recur: null },
+      { id: uid(), text: "랩미팅", date: todayKey, start: "14:00", end: "15:00", categories: ["meeting"], star: true, done: false, doneDates: {}, recur: { freq: "weekly", until: null } },
+      { id: uid(), text: "논문 읽기", date: todayKey, start: null, end: null, categories: ["personal"], star: false, done: false, doneDates: {}, recur: null },
     );
     const d2 = parseKey(todayKey); d2.setDate(d2.getDate() + 7);
     state.deadlines.push({ id: uid(), title: "졸업논문 초고 제출", date: keyOf(d2.getFullYear(), d2.getMonth(), d2.getDate()), category: "class", subtasks: [{ id: uid(), text: "초고", done: true }, { id: uid(), text: "수정", done: false }, { id: uid(), text: "제출", done: false }] });
@@ -785,6 +836,58 @@ $("importFile").addEventListener("change", (e) => {
   e.target.value = "";  // 같은 파일 다시 선택 가능하게
 });
 
+/* ============================================================
+   카테고리 설정 (추가 / 이름 변경 / 색 / 삭제)
+   ============================================================ */
+function openSettings() { renderCatSettings(); $("settingsModal").hidden = false; }
+function refreshCats() { renderCatFilter(); renderCalendar(); renderDayPanel(); }
+
+function renderCatSettings() {
+  const wrap = $("catSettingsList");
+  wrap.innerHTML = "";
+  if (state.categories.length === 0)
+    wrap.innerHTML = `<p class="cat-empty">아직 카테고리가 없어요. 아래에서 추가하세요.</p>`;
+  state.categories.forEach((cat) => {
+    const row = document.createElement("div");
+    row.className = "cat-set-row";
+
+    const inp = document.createElement("input");
+    inp.className = "cat-name-input";
+    inp.value = cat.label; inp.placeholder = "카테고리 이름";
+    inp.oninput = () => { cat.label = inp.value; save(); refreshCats(); };
+
+    const sw = document.createElement("div");
+    sw.className = "cat-swatches";
+    PALETTE.forEach((col) => {
+      const s = document.createElement("button");
+      s.className = `cat-sw c-${col}` + (cat.color === col ? " on" : "");
+      s.title = col;
+      s.onclick = () => { cat.color = col; save(); renderCatSettings(); refreshCats(); };
+      sw.appendChild(s);
+    });
+
+    const del = document.createElement("button");
+    del.className = "cat-del"; del.textContent = "🗑"; del.title = "삭제";
+    del.onclick = () => deleteCategory(cat);
+
+    row.append(inp, sw, del);
+    wrap.appendChild(row);
+  });
+}
+function addCategory() {
+  state.categories.push({ id: uid(), label: "새 카테고리", color: PALETTE[state.categories.length % PALETTE.length] });
+  save(); renderCatSettings(); refreshCats();
+}
+function deleteCategory(cat) {
+  if (!confirm(`'${cat.label || "이 카테고리"}'를 삭제할까요?\n할 일·마감에서도 제거됩니다.`)) return;
+  state.categories = state.categories.filter((c) => c.id !== cat.id);
+  for (const it of state.items) it.categories = (it.categories || []).filter((c) => c !== cat.id);
+  for (const d of state.deadlines) if (d.category === cat.id) d.category = null;
+  activeCats.delete(cat.id);
+  save(); renderCatSettings(); refreshCats();
+}
+$("addCatBtn").addEventListener("click", addCategory);
+
 /* 전체 화면 다시 그리기 — 클라우드에서 데이터를 받아온 뒤에도 호출 */
 function renderAll() {
   renderCatFilter();
@@ -801,11 +904,7 @@ window.Dadam = {
   /* 클라우드 데이터로 현재 상태를 통째로 교체하고 다시 그린다 */
   replaceState(next) {
     if (!next || typeof next !== "object") return;
-    state = next;
-    state.items     ||= [];
-    state.deadlines ||= [];
-    state.notes     ||= [];
-    state.journals  ||= {};
+    state = normalizeState(next);
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
     renderAll();
   },
