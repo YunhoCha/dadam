@@ -2,7 +2,7 @@
   /* 여름 하늘 팔레트 */
   --sky-50:#f4f9ff; --sky-100:#e6f2ff; --sky-200:#cfe6ff; --sky-300:#a8d3ff;
   --sky-400:#7bbcf7; --sky-500:#4f9fe8; --sky-600:#3a86d4; --sky-700:#2c6cb0;
-  --ink:#2a3b4d; --ink-soft:#5b6f82; --ink-mute:#93a6b6;
+  --ink:#1b2836; --ink-soft:#3c4f61; --ink-mute:#6a7e8f;
   --white:#ffffff; --line:#dcebfb;
   --sun:#ffd66b; --coral:#ff9a8b; --mint:#8fd9c4; --lilac:#b9aaf2;
   --shadow-sm:0 2px 8px rgba(79,159,232,.08);
@@ -494,6 +494,27 @@ body {
   .calendar-grid { gap:5px; }
 }
 
+/* 빠른 메모 블럭 패널 (INBOX / 주간 / 월간) */
+.quick-panel { margin-top:18px; border-top:1px solid var(--line); padding-top:14px; }
+.qp-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.qp-tabs { display:inline-flex; gap:4px; background:var(--sky-50); padding:3px; border-radius:10px; }
+.qp-tab { border:none; background:transparent; padding:5px 11px; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; transition:.14s; }
+.qp-tab:hover { color:var(--sky-700); }
+.qp-tab.on { background:var(--white); color:var(--sky-700); box-shadow:var(--shadow-sm); }
+.qp-context { font-size:12px; color:var(--ink-mute); font-weight:600; }
+.qp-list { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
+.qp-empty { font-size:12.5px; color:var(--ink-mute); line-height:1.6; padding:8px 4px; }
+.qp-block { display:flex; align-items:center; gap:4px; border-radius:9px; padding:2px 4px; transition:background .14s; }
+.qp-block:hover { background:var(--sky-50); }
+.qp-handle { flex-shrink:0; cursor:grab; color:var(--ink-mute); font-size:15px; line-height:1; padding:2px; user-select:none; }
+.qp-handle:active { cursor:grabbing; }
+.qp-text { flex:1; min-width:0; font-size:13.5px; line-height:1.55; color:var(--ink); outline:none; padding:4px 2px; }
+.qp-text:empty::before { content:attr(data-ph); color:var(--ink-mute); }
+.qp-btn { flex-shrink:0; opacity:0; border:none; background:transparent; cursor:pointer; font-size:13px; padding:3px 5px; border-radius:6px; transition:.14s; }
+.qp-block:hover .qp-btn { opacity:1; }
+.qp-btn:hover { background:var(--sky-100); }
+@media (hover:none) { .qp-btn { opacity:.65; } }
+
 /* =========================================================
    글자·아이콘 크게 보기 (전체 키움 — 캘린더/작은 아이콘 강조)
    ========================================================= */
@@ -543,6 +564,10 @@ body {
 .tpop-title { font-size:16px; }
 .tpop-meta span { font-size:12.5px; }
 .tpop-note, .item-note { font-size:14.5px; }
+
+/* 글자 진하게: 본문 굵기 500 (손글씨 제목은 합성 볼드 방지로 400 유지) */
+body { font-weight:500; }
+.cal-title h2, .modal-title-txt, .sec-head h3, .day-head h3, .journal-head h4 { font-weight:400; }
 
 /* 좁은 화면에서는 살짝만 작게 */
 @media (max-width:560px) {

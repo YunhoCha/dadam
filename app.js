@@ -34,6 +34,9 @@ function normalizeState(s) {
   s.notes      ||= [];
   s.journals   ||= {};
   s.categories ||= DEFAULT_CATS.map((c) => ({ ...c }));
+  s.inbox   ||= [];   // 임시 메모 블럭 [{id,text}]
+  s.weekly  ||= {};   // 주 단위: { 일요일키: [{id,text}] }
+  s.monthly ||= {};   // 월 단위: { "YYYY-MM": [{id,text}] }
   for (const it of s.items) {
     if (!Array.isArray(it.categories)) it.categories = it.category != null ? [it.category] : [];
     delete it.category;
@@ -392,7 +395,18 @@ function setupDropTarget(el, key) {
   el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
   el.addEventListener("drop", (e) => {
     e.preventDefault(); el.classList.remove("drop-target");
-    if (!dragData || dragData.from === key) return;
+    if (!dragData) return;
+    // 빠른 메모 블럭 → 그 날짜의 할 일로 이동
+    if (dragData.type === "panelBlock") {
+      const text = (dragData.text || "").trim();
+      if (text) state.items.push({ id: uid(), text, date: key, endDate: null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null });
+      dragData.remove();
+      save(); renderCalendar(); renderDayPanel();
+      dragData = null;
+      return;
+    }
+    // 기존: 할 일 칩을 다른 날짜로 이동
+    if (dragData.from === key) return;
     const it = state.items.find((x) => x.id === dragData.id);
     if (it) { it.date = key; save(); renderCalendar(); renderDayPanel(); }
     dragData = null;
@@ -433,6 +447,7 @@ function renderDayPanel() {
   $("ringFg").style.strokeDashoffset = 100 - pct;
 
   renderJournal();
+  renderQuickPanel();
 }
 
 function makeBlock(t, key) {
@@ -945,6 +960,93 @@ $("importFile").addEventListener("change", (e) => {
   if (f) importData(f);
   e.target.value = "";  // 같은 파일 다시 선택 가능하게
 });
+
+/* ============================================================
+   빠른 메모 블럭 — INBOX / 주간 / 월간 (노션식 블럭)
+   - 블럭을 달력으로 드래그 → 그 날짜 할 일로 이동
+   - 📝 버튼 → 메모로 보내기
+   ============================================================ */
+let qpTab = "inbox";
+function weekStartKey(key) {
+  const d = parseKey(key); d.setDate(d.getDate() - d.getDay());   // 일요일로
+  return keyOf(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function currentQuickList() {
+  const ctx = selectedKey || todayKey;
+  if (qpTab === "inbox") return state.inbox;
+  if (qpTab === "weekly") return (state.weekly[weekStartKey(ctx)] ||= []);
+  return (state.monthly[ctx.slice(0, 7)] ||= []);
+}
+function renderQuickPanel() {
+  document.querySelectorAll(".qp-tab").forEach((t) => t.classList.toggle("on", t.dataset.qp === qpTab));
+  const ctx = selectedKey || todayKey;
+  const ctxEl = $("qpContext");
+  if (qpTab === "inbox") ctxEl.textContent = "아무거나 임시로";
+  else if (qpTab === "weekly") {
+    const s = weekStartKey(ctx); const e = parseKey(s); e.setDate(e.getDate() + 6);
+    ctxEl.textContent = `${s.slice(5).replace("-", "/")} ~ ${keyOf(e.getFullYear(), e.getMonth(), e.getDate()).slice(5).replace("-", "/")}`;
+  } else ctxEl.textContent = `${ctx.slice(0, 4)}년 ${Number(ctx.slice(5, 7))}월`;
+
+  const wrap = $("qpList"); wrap.innerHTML = "";
+  const list = currentQuickList();
+  if (list.length === 0) {
+    wrap.innerHTML = `<div class="qp-empty">＋ 로 블럭 추가. ⠿ 드래그로 달력에, 📝로 메모로 보낼 수 있어요.</div>`;
+  } else {
+    list.forEach((blk) => wrap.appendChild(makeQuickBlock(blk, list)));
+  }
+}
+function makeQuickBlock(blk, list) {
+  const el = document.createElement("div");
+  el.className = "qp-block";
+
+  const handle = document.createElement("div");
+  handle.className = "qp-handle"; handle.textContent = "⠿"; handle.title = "달력으로 드래그"; handle.draggable = true;
+  handle.addEventListener("dragstart", (e) => {
+    dragData = { type: "panelBlock", text: blk.text, remove: () => { const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1); } };
+    e.dataTransfer.effectAllowed = "move";
+    const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+    e.dataTransfer.setDragImage(img, 0, 0);
+    showGhost(blk.text || "(빈 블럭)");
+  });
+  handle.addEventListener("drag", moveGhost);
+  handle.addEventListener("dragend", () => { hideGhost(); document.querySelectorAll(".day.drop-target").forEach((d) => d.classList.remove("drop-target")); });
+
+  const txt = document.createElement("div");
+  txt.className = "qp-text"; txt.contentEditable = "true"; txt.textContent = blk.text; txt.dataset.ph = "입력…";
+  txt.addEventListener("input", () => { blk.text = txt.textContent; save(); });
+  txt.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); txt.blur(); addQuickBlock(); }
+    if (e.key === "Backspace" && txt.textContent === "") { e.preventDefault(); const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1); save(); renderQuickPanel(); }
+  });
+
+  const toMemo = document.createElement("button");
+  toMemo.className = "qp-btn"; toMemo.textContent = "📝"; toMemo.title = "메모로 보내기";
+  toMemo.onclick = () => blockToMemo(blk, list);
+
+  const del = document.createElement("button");
+  del.className = "qp-btn"; del.textContent = "✕"; del.title = "삭제";
+  del.onclick = () => { const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1); save(); renderQuickPanel(); };
+
+  el.append(handle, txt, toMemo, del);
+  return el;
+}
+function addQuickBlock() {
+  const list = currentQuickList();
+  list.push({ id: uid(), text: "" });
+  save(); renderQuickPanel();
+  requestAnimationFrame(() => { const ts = $("qpList").querySelectorAll(".qp-text"); const last = ts[ts.length - 1]; if (last) last.focus(); });
+}
+function blockToMemo(blk, list) {
+  const text = (blk.text || "").trim();
+  if (!text) { alert("빈 블럭은 메모로 보낼 수 없어요."); return; }
+  const n = { id: uid(), title: text.split("\n")[0].slice(0, 40), body: escapeHtml(text).replace(/\n/g, "<br>"), pinned: false, updated: Date.now(), linkDate: null };
+  state.notes.push(n);
+  const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1);
+  save(); renderQuickPanel(); renderMemoList();
+  openMemo(n.id);   // 메모 편집창 열어 확인
+}
+document.querySelectorAll(".qp-tab").forEach((tab) => tab.addEventListener("click", () => { qpTab = tab.dataset.qp; renderQuickPanel(); }));
+$("qpAdd").addEventListener("click", addQuickBlock);
 
 /* ============================================================
    카테고리 설정 (추가 / 이름 변경 / 색 / 삭제)

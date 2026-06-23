@@ -93,6 +93,20 @@
           </div>
           <div class="journal-body" id="journalBody" contenteditable="true" data-ph="오늘 하루를 기록해보세요…"></div>
         </div>
+
+        <!-- 빠른 메모 블럭: INBOX / 주간 / 월간 -->
+        <div class="quick-panel">
+          <div class="qp-head">
+            <div class="qp-tabs" id="qpTabs">
+              <button class="qp-tab on" data-qp="inbox">📥 INBOX</button>
+              <button class="qp-tab" data-qp="weekly">주간</button>
+              <button class="qp-tab" data-qp="monthly">월간</button>
+            </div>
+            <span class="qp-context" id="qpContext"></span>
+          </div>
+          <div class="qp-list" id="qpList"></div>
+          <button class="add-block" id="qpAdd"><span>＋</span> 블럭 추가 <kbd>Enter</kbd></button>
+        </div>
       </div>
       </div><!-- /tab-pane day -->
 
