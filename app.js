@@ -108,6 +108,49 @@ function occursOn(it, key) {
   return key >= it.date && key <= end;
 }
 const isRange = (it) => !!(it.endDate && it.endDate !== it.date);
+
+/* ---------- 인라인 문법: #태그(카테고리) · 시간 자동 인식 ----------
+   "#수업 12시 랩미팅" → 카테고리 수업 + 시작 12:00, 텍스트 "랩미팅" */
+function resolveCategory(name) {
+  let cat = state.categories.find((c) => c.label.toLowerCase() === name.toLowerCase());
+  if (!cat) { cat = { id: uid(), label: name, color: PALETTE[state.categories.length % PALETTE.length] }; state.categories.push(cat); }
+  return cat.id;
+}
+function parseTime(text) {
+  const apOf = (s) => (/오후|pm/i.test(s || "") ? 1 : (/오전|am/i.test(s || "") ? 0 : -1));
+  const pats = [
+    /(오전|오후|am|pm)?\s*(\d{1,2}):(\d{2})/i,        // 12:30
+    /(오전|오후|am|pm)?\s*(\d{1,2})시\s*반/i,          // 12시 반
+    /(오전|오후|am|pm)?\s*(\d{1,2})시\s*(\d{1,2})\s*분/i, // 12시 30분
+    /(오전|오후|am|pm)?\s*(\d{1,2})\s*시(?!간)/i,      // 12시 (시간/시작 제외)
+  ];
+  for (let i = 0; i < pats.length; i++) {
+    const m = text.match(pats[i]);
+    if (!m) continue;
+    let h = parseInt(m[2], 10), min = 0;
+    if (i === 0 || i === 2) min = parseInt(m[3], 10);
+    else if (i === 1) min = 30;
+    const ap = apOf(m[1]);
+    if (ap === 1 && h < 12) h += 12;        // 오후
+    else if (ap === 0 && h === 12) h = 0;   // 오전 12시 = 0시
+    if (h > 23 || min > 59) continue;
+    return { start: `${pad(h)}:${pad(min)}`, matched: m[0] };
+  }
+  return null;
+}
+function applyInlineSyntax(t) {
+  let text = t.text || "", changed = false;
+  const tm = parseTime(text);
+  if (tm) { t.start = tm.start; text = text.replace(tm.matched, " "); changed = true; }
+  const tags = [];
+  text = text.replace(/#([^\s#]+)/g, (m, name) => { tags.push(name); changed = true; return " "; });
+  if (tags.length) {
+    t.categories ||= [];
+    for (const nm of tags) { const id = resolveCategory(nm); if (!t.categories.includes(id)) t.categories.push(id); }
+  }
+  if (changed) t.text = text.replace(/\s{2,}/g, " ").trim();
+  return changed;
+}
 function isDone(it, key) { return it.recur ? !!(it.doneDates && it.doneDates[key]) : it.done; }
 function toggleDone(it, key) {
   if (it.recur) { it.doneDates ||= {}; it.doneDates[key] = !it.doneDates[key]; }
@@ -217,8 +260,8 @@ function makeDayCell(c) {
   }
   // 이 날에 할 일 추가
   const add = document.createElement("button");
-  add.className = "day-add"; add.textContent = "＋"; add.title = "이 날에 할 일 추가";
-  add.onclick = (e) => { e.stopPropagation(); selectDate(key); switchToDayTab(); addBlock(); };
+  add.className = "day-add"; add.textContent = "＋"; add.title = "이 날에 일정 추가(상세창)";
+  add.onclick = (e) => { e.stopPropagation(); addItemOnDate(key); };
   tools.appendChild(add);
   top.appendChild(tools);
   el.appendChild(top);
@@ -277,6 +320,14 @@ function createRangeTask(aKey, bKey) {
   state.items.push(it);
   save(); renderCalendar(); selectDate(s);
   openItemModal(it);                                  // 상세 모달에서 이름·메모 입력
+  requestAnimationFrame(() => $("itemText").focus());
+}
+/* 날짜 칸 ＋ → 그 날짜에 일정 만들고 상세창 열기 */
+function addItemOnDate(key) {
+  const it = { id: uid(), text: "", date: key, endDate: null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null };
+  state.items.push(it);
+  save(); selectDate(key);
+  openItemModal(it);
   requestAnimationFrame(() => $("itemText").focus());
 }
 document.addEventListener("mouseup", () => {
@@ -399,9 +450,13 @@ function setupDropTarget(el, key) {
     // 빠른 메모 블럭 → 그 날짜의 할 일로 이동
     if (dragData.type === "panelBlock") {
       const text = (dragData.text || "").trim();
-      if (text) state.items.push({ id: uid(), text, date: key, endDate: null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null });
+      if (text) {
+        const it = { id: uid(), text, date: key, endDate: null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null };
+        applyInlineSyntax(it);   // #태그·시간 자동 적용
+        state.items.push(it);
+      }
       dragData.remove();
-      save(); renderCalendar(); renderDayPanel();
+      save(); renderCalendar(); renderDayPanel(); renderCatFilter();
       dragData = null;
       return;
     }
@@ -472,7 +527,10 @@ function makeBlock(t, key) {
   text.className = "block-text"; text.contentEditable = "true"; text.dataset.ph = "할 일 입력…";
   text.textContent = t.text;
   text.addEventListener("input", () => { t.text = text.textContent; save(); });
-  text.addEventListener("blur", renderCalendar);
+  text.addEventListener("blur", () => {
+    if (applyInlineSyntax(t)) { save(); renderDayPanel(); renderCatFilter(); }
+    renderCalendar();
+  });
   text.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); text.blur(); addBlock(); }
     if (e.key === "Backspace" && text.textContent === "") { e.preventDefault(); removeItem(t.id); }
@@ -600,6 +658,15 @@ function persistItem() {
   save(); renderCalendar(); renderDayPanel();
 }
 $("itemText").addEventListener("input", persistItem);
+$("itemText").addEventListener("blur", () => {
+  if (!editingItem) return;
+  if (applyInlineSyntax(editingItem)) {
+    $("itemText").value = editingItem.text;
+    $("itemStart").value = editingItem.start || "";
+    buildItemCats();
+    save(); renderCalendar(); renderDayPanel(); renderCatFilter();
+  }
+});
 $("itemDate").addEventListener("input", persistItem);
 $("itemEndDate").addEventListener("input", persistItem);
 $("itemNote").addEventListener("input", persistItem);
