@@ -229,7 +229,46 @@ function renderCalendar(dir) {
   for (const c of cells) grid.appendChild(makeDayCell(c));
   // 월 이동 시 스르륵 슬라이드
   if (dir) { grid.classList.remove("slide-up", "slide-down"); void grid.offsetWidth; grid.classList.add(dir === "down" ? "slide-up" : "slide-down"); }
+  scheduleTrim();
 }
+
+/* 셀에 들어가는 만큼만 칩 표시, 넘치면 "+N개 더" */
+let trimScheduled = false;
+function scheduleTrim() {
+  if (trimScheduled) return;
+  trimScheduled = true;
+  requestAnimationFrame(() => { trimScheduled = false; trimDayChips(); });
+}
+function trimDayChips() {
+  grid.querySelectorAll(".day").forEach((cell) => {
+    const box = cell.querySelector(".day-chips");
+    if (!box) return;
+    box.querySelectorAll(".day-more").forEach((m) => m.remove());
+    const chips = [...box.children];
+    chips.forEach((c) => c.classList.remove("hidden-chip"));
+    const avail = box.clientHeight;
+    if (avail <= 0 || chips.length === 0) return;
+    const boxTop = box.getBoundingClientRect().top;
+    let firstHidden = -1;
+    for (let i = 0; i < chips.length; i++) {
+      if (chips[i].getBoundingClientRect().bottom - boxTop > avail + 0.5) { firstHidden = i; break; }
+    }
+    if (firstHidden === -1) return;   // 전부 들어감
+    const labelH = 17;                // "+N개 더" 줄 높이 확보
+    while (firstHidden > 0) {
+      const prevBottom = chips[firstHidden - 1].getBoundingClientRect().bottom - boxTop;
+      if (prevBottom + labelH <= avail) break;
+      firstHidden--;
+    }
+    for (let j = firstHidden; j < chips.length; j++) chips[j].classList.add("hidden-chip");
+    const more = document.createElement("div");
+    more.className = "day-more";
+    more.textContent = `+${chips.length - firstHidden}개 더`;
+    box.appendChild(more);
+  });
+}
+let trimResizeTimer = null;
+window.addEventListener("resize", () => { clearTimeout(trimResizeTimer); trimResizeTimer = setTimeout(trimDayChips, 150); });
 
 function makeDayCell(c) {
   const key = keyOf(c.y, c.m, c.d);
@@ -274,14 +313,9 @@ function makeDayCell(c) {
   // 마감 칩 (제목 + D-day) 먼저
   const dls = state.deadlines.filter((d) => d.date === key);
   for (const d of dls) chips.appendChild(makeDeadlineChip(d));
-  // 일정/할 일 칩
+  // 일정/할 일 칩 — 일단 전부 넣고, 렌더 후 셀 높이에 맞춰 잘라냄(trimDayChips)
   const items = itemsForDate(key);
-  for (const t of items.slice(0, 3)) chips.appendChild(makeChip(t, key));
-  if (items.length > 3) {
-    const more = document.createElement("div");
-    more.className = "day-more"; more.textContent = `+${items.length - 3}개 더`;
-    chips.appendChild(more);
-  }
+  for (const t of items) chips.appendChild(makeChip(t, key));
   el.appendChild(chips);
 
   el.addEventListener("click", (e) => {

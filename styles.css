@@ -21,8 +21,9 @@ body {
 }
 .app {
   display:grid; grid-template-columns:minmax(0,1fr) 460px;
-  grid-template-rows:minmax(100vh,auto); min-height:100vh; gap:0;
+  grid-template-rows:100vh; height:100vh; gap:0;
 }
+.main { overflow:hidden; }   /* 캘린더가 화면 높이를 넘기지 않게 → 셀에 들어가는 만큼만 칩 표시 */
 
 /* 색상 클래스 (--c = 대표색, --t = 연한 배경) */
 .c-sky   { --c:var(--sky-500); --t:var(--sky-100); --d:var(--sky-700); }
@@ -223,7 +224,8 @@ body {
 .tpop-note:focus { border-color:var(--sky-400); box-shadow:0 0 0 3px var(--sky-100); }
 .tpop-act { display:flex; gap:6px; flex-wrap:wrap; }
 
-.day-chips { display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+.day-chips { display:flex; flex-direction:column; gap:3px; overflow:hidden; flex:1; min-height:0; }
+.day-chips .hidden-chip { display:none; }
 .chip {
   font-size:11px; line-height:1.3; padding:3px 7px; border-radius:7px;
   background:var(--t,var(--sky-100)); color:var(--d,var(--sky-700));
@@ -501,8 +503,8 @@ body {
 }
 @media (max-width:860px) {
   body { overflow-y:auto; }
-  .app { display:flex; flex-direction:column; min-height:100vh; grid-template-rows:none; }
-  .main { padding:16px 14px; }
+  .app { display:flex; flex-direction:column; min-height:100vh; height:auto; grid-template-rows:none; }
+  .main { padding:16px 14px; overflow:visible; }
   .side-panel { border-left:none; border-top:1px solid var(--line); height:auto; }
   .tab-pane.on { overflow:visible; }
   .block-list, .memo-list { max-height:none; }
