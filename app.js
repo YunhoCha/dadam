@@ -39,6 +39,7 @@ function normalizeState(s) {
   s.monthly ||= {};   // 월 단위: { "YYYY-MM": [{id,text}] }
   for (const it of s.items) {
     if (!Array.isArray(it.categories)) it.categories = it.category != null ? [it.category] : [];
+    if (!Array.isArray(it.subtasks)) it.subtasks = [];
     delete it.category;
   }
   return s;
@@ -677,6 +678,7 @@ function insertCategoryChip(el, ctx, cat, t) {
 function makeBlock(t, key) {
   const el = document.createElement("div");
   el.className = "block" + (isDone(t, key) ? " done" : "");
+  el.dataset.id = t.id;
 
   const star = document.createElement("button");
   star.className = "block-star" + (t.star ? " on" : "");
@@ -707,7 +709,10 @@ function makeBlock(t, key) {
   }
   if (t.recur) meta.innerHTML += `<span class="m-rec">↻ ${t.recur.freq === "biweekly" ? "격주" : "매주"}</span>`;
   if (t.note && t.note.trim()) meta.innerHTML += `<span class="m-note">📝 노트</span>`;
+  const subs = t.subtasks || [];
+  if (subs.length) meta.innerHTML += `<span class="m-step">☑ ${subs.filter((s) => s.done).length}/${subs.length}</span>`;
   if (meta.innerHTML) main.appendChild(meta);
+  main.appendChild(renderBlockSubs(t));
   el.appendChild(main);
 
   const edit = document.createElement("button");
@@ -720,6 +725,46 @@ function makeBlock(t, key) {
   del.onclick = () => removeItem(t.id);
   el.appendChild(del);
   return el;
+}
+
+/* 블록 아래 하위 단계(인라인) — 체크/편집/삭제/추가 */
+function renderBlockSubs(t) {
+  const subs = t.subtasks || [];
+  const box = document.createElement("div");
+  box.className = "block-subs" + (subs.length ? "" : " empty");
+  subs.forEach((s) => {
+    const row = document.createElement("div");
+    row.className = "bsub-row" + (s.done ? " done" : "");
+    const chk = document.createElement("div");
+    chk.className = "block-check sm" + (s.done ? " checked" : "");
+    chk.onclick = () => { s.done = !s.done; save(); renderDayPanel(); renderCalendar(); };
+    const txt = document.createElement("div");
+    txt.className = "bsub-text"; txt.contentEditable = "true"; txt.textContent = s.text; txt.dataset.ph = "단계…";
+    txt.addEventListener("input", () => { s.text = txt.textContent; save(); });
+    txt.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); txt.blur(); addBlockSub(t); }
+      if (e.key === "Backspace" && txt.textContent === "") { e.preventDefault(); t.subtasks = t.subtasks.filter((x) => x !== s); save(); renderDayPanel(); renderCalendar(); }
+    });
+    const d = document.createElement("button");
+    d.className = "bsub-del"; d.textContent = "✕";
+    d.onclick = () => { t.subtasks = t.subtasks.filter((x) => x !== s); save(); renderDayPanel(); renderCalendar(); };
+    row.append(chk, txt, d);
+    box.appendChild(row);
+  });
+  const add = document.createElement("button");
+  add.className = "bsub-add"; add.textContent = "＋ 하위 단계";
+  add.onclick = () => addBlockSub(t);
+  box.appendChild(add);
+  return box;
+}
+function addBlockSub(t) {
+  t.subtasks ||= [];
+  t.subtasks.push({ id: uid(), text: "", done: false });
+  save(); renderDayPanel(); renderCalendar();
+  requestAnimationFrame(() => {
+    const block = blockList.querySelector(`.block[data-id="${t.id}"]`);
+    if (block) { const ins = block.querySelectorAll(".bsub-text"); const last = ins[ins.length - 1]; if (last) last.focus(); }
+  });
 }
 
 /* 우측 패널을 '일정·할 일' 탭으로 전환 */
@@ -763,7 +808,35 @@ function openItemModal(it) {
   $("recurUntilWrap").hidden = !it.recur;
   $("itemNote").value = it.note || "";
   buildItemCats();
+  renderItemSubtasks();
   $("itemModal").hidden = false;
+}
+/* 하위 단계(서브태스크) — 상세 모달 */
+function renderItemSubtasks() {
+  const wrap = $("itemSubList"); wrap.innerHTML = "";
+  editingItem.subtasks ||= [];
+  for (const s of editingItem.subtasks) {
+    const row = document.createElement("div");
+    row.className = "sub-row" + (s.done ? " done" : "");
+    const chk = document.createElement("div");
+    chk.className = "block-check sm" + (s.done ? " checked" : "");
+    chk.onclick = () => { s.done = !s.done; save(); renderItemSubtasks(); renderDayPanel(); renderCalendar(); };
+    const inp = document.createElement("input");
+    inp.className = "sub-input"; inp.value = s.text; inp.placeholder = "단계 이름";
+    inp.oninput = () => { s.text = inp.value; save(); };
+    inp.onblur = () => { renderDayPanel(); };
+    const del = document.createElement("button");
+    del.className = "block-del"; del.textContent = "✕";
+    del.onclick = () => { editingItem.subtasks = editingItem.subtasks.filter((x) => x !== s); save(); renderItemSubtasks(); renderDayPanel(); renderCalendar(); };
+    row.append(chk, inp, del);
+    wrap.appendChild(row);
+  }
+}
+function addItemSubtask(focusInput) {
+  editingItem.subtasks ||= [];
+  editingItem.subtasks.push({ id: uid(), text: "", done: false });
+  save(); renderItemSubtasks(); renderDayPanel(); renderCalendar();
+  if (focusInput) requestAnimationFrame(() => { const ins = $("itemSubList").querySelectorAll(".sub-input"); const last = ins[ins.length - 1]; if (last) last.focus(); });
 }
 /* 할 일: 카테고리를 태그처럼 여러 개 토글 */
 function buildItemCats() {
@@ -846,6 +919,7 @@ $("itemRecur").addEventListener("change", () => {
 });
 $("itemUntil").addEventListener("input", persistItem);
 $("itemDelete").addEventListener("click", () => { removeItem(editingItem.id); $("itemModal").hidden = true; });
+$("itemAddSub").addEventListener("click", () => addItemSubtask(true));
 
 /* ============================================================
    마감 / 데드라인

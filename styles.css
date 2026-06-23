@@ -337,6 +337,21 @@ body {
 .m-cat .dot { width:7px; height:7px; border-radius:50%; background:var(--c); }
 .m-rec { background:#efebfd; color:#6b54c2; }
 .m-note { background:#fff5da; color:#b8893a; }
+.m-step { background:#e8f0f7; color:var(--sky-700); }
+
+/* 블록 하위 단계(인라인) */
+.block-subs { display:flex; flex-direction:column; gap:2px; margin:5px 0 1px; }
+.bsub-row { display:flex; align-items:center; gap:7px; }
+.bsub-row .block-check.sm { flex-shrink:0; }
+.bsub-text { flex:1; min-width:0; font-size:13px; line-height:1.5; color:var(--ink-soft); outline:none; padding:1px 0; }
+.bsub-text:empty::before { content:attr(data-ph); color:var(--ink-mute); }
+.bsub-row.done .bsub-text { text-decoration:line-through; color:var(--ink-mute); }
+.bsub-del { opacity:0; border:none; background:transparent; color:var(--ink-mute); cursor:pointer; font-size:11px; padding:2px 3px; line-height:1; }
+.bsub-row:hover .bsub-del { opacity:1; }
+.bsub-add { align-self:flex-start; border:none; background:transparent; color:var(--sky-500); cursor:pointer; font-size:12px; padding:2px 5px; border-radius:6px; font-family:inherit; font-weight:500; transition:.14s; }
+.bsub-add:hover { background:var(--sky-50); }
+.block-subs.empty .bsub-add { opacity:0; }
+.block:hover .block-subs.empty .bsub-add { opacity:.65; }
 .block-edit, .block-del { opacity:0; border:none; background:transparent; color:var(--ink-mute); cursor:pointer; font-size:13px; padding:2px 3px; transition:.14s; line-height:1; margin-top:2px; }
 .block:hover .block-edit, .block:hover .block-del { opacity:1; }
 .block-edit:hover { color:var(--sky-600); }

@@ -80,6 +80,7 @@ python -m http.server 4321   # → http://localhost:4321
 - 노션식 블럭(체크박스 + 인라인 편집), `Enter`로 추가 / 빈 블럭 `Backspace`로 삭제.
 - 칩 클릭 또는 ⚙ → 상세 모달: **기간(시작~종료일)**, **시작·종료 시간**, **카테고리(태그처럼 복수 지정)**, **별표(중요)**, **반복(매주/격주 + 종료일)**, **작업별 노트(메모)**.
 - **작업 노트**가 있으면 캘린더 칩·우측 블록에 📝 아이콘.
+- **하위 단계(서브태스크)**: 상세 모달 또는 우측 블록 아래에서 단계 추가·체크·편집·삭제. 진행도 `☑ 2/3` 표시.
 - 정렬: 기간 작업 → 별표 → 시간 순.
 - **인라인 문법(라이브)**:
   - `#` 입력 → **카테고리 드롭다운**(필터·키보드/클릭·없으면 새로 생성). 블럭은 색 칩으로, 상세창은 카테고리 버튼 하이라이트로 피드백. (블럭 입력칸·상세창 제목 모두 지원)
@@ -132,7 +133,7 @@ python -m http.server 4321   # → http://localhost:4321
   ],
   items: [        // 일정/할 일
     { id, text, date:"YYYY-MM-DD", endDate:null|"YYYY-MM-DD",  // endDate 있으면 기간 작업
-      start, end, categories:[catId,...], note, star,
+      start, end, categories:[catId,...], note, subtasks:[{id,text,done}], star,
       done, doneDates:{}, recur:null|{freq:"weekly"|"biweekly", until} }
   ],
   deadlines: [ { id, title, date, category, subtasks:[{id,text,done}] } ],
