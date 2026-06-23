@@ -210,6 +210,16 @@ function renderCatFilter() {
 /* ============================================================
    캘린더
    ============================================================ */
+/* 공휴일 / 24절기 (kdata.js) */
+function holidayOf(key) {
+  const k = window.KDATA;
+  if (!k) return null;
+  if (k.holi[key]) return k.holi[key];          // 음력·대체 우선
+  const md = key.slice(5);
+  return k.fixed[md] || null;                    // 고정 공휴일
+}
+function termOf(key) { return (window.KDATA && window.KDATA.term[key]) || null; }
+
 function prevMY() { return viewMonth === 0 ? { y: viewYear - 1, m: 11 } : { y: viewYear, m: viewMonth - 1 }; }
 function nextMY() { return viewMonth === 11 ? { y: viewYear + 1, m: 0 } : { y: viewYear, m: viewMonth + 1 }; }
 
@@ -284,6 +294,15 @@ function makeDayCell(c) {
   const num = document.createElement("div");
   num.className = "day-num"; num.textContent = c.d;
   top.appendChild(num);
+  // 공휴일 / 절기 라벨
+  const hol = holidayOf(key), term = termOf(key);
+  if (hol) el.classList.add("is-holiday");
+  if (hol || term) {
+    const lab = document.createElement("span");
+    lab.className = "day-label " + (hol ? "holiday" : "term");
+    lab.textContent = hol || term;
+    top.appendChild(lab);
+  }
   const tools = document.createElement("div");
   tools.className = "day-tools";
   // 연결된 메모 아이콘

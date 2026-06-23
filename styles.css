@@ -178,6 +178,11 @@ body {
 .day:nth-child(7n+1) .day-num { color:var(--coral); }
 .day:nth-child(7n) .day-num { color:var(--sky-500); }
 .day.is-today .day-num, .day.is-outside .day-num { color:unset; }
+.day.is-holiday:not(.is-today):not(.is-outside) .day-num { color:#e0566f; }
+.day-label { font-size:10.5px; font-weight:600; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:66px; margin-left:2px; align-self:center; }
+.day-label.holiday { color:#e0566f; }
+.day-label.term { color:var(--sky-500); font-weight:500; }
+.day.is-outside .day-label { opacity:.5; }
 .memo-ind {
   border:none; background:transparent; cursor:pointer; font-size:11px; line-height:1;
   display:inline-flex; align-items:center; gap:1px; padding:2px; border-radius:6px; transition:.14s;
