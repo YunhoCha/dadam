@@ -287,6 +287,11 @@ function makeDayCell(c) {
     if (suppressDayClick) { suppressDayClick = false; return; }   // 기간 드래그 직후 클릭 무시
     selectDate(key);
   });
+  // 빈 영역 더블클릭 → 그 날짜에 할 일 빠르게 추가
+  el.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".chip") || e.target.closest("button")) return;
+    selectDate(key); switchToDayTab(); addBlock();
+  });
   // 빈 영역 드래그 → 기간 선택
   el.addEventListener("mousedown", (e) => {
     if (e.button !== 0 || e.target.closest(".chip") || e.target.closest("button") || e.target.closest(".memo-ind")) return;
@@ -388,12 +393,13 @@ function makeChip(t, key) {
     chip.draggable = true;
     chip.dataset.id = t.id;
     chip.addEventListener("dragstart", (e) => {
-      dragData = { id: t.id, from: key };
+      const copy = e.ctrlKey || e.metaKey;
+      dragData = { id: t.id, from: key, copy };
       chip.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.effectAllowed = "copyMove";
       const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
       e.dataTransfer.setDragImage(img, 0, 0);
-      showGhost(t.text || "(빈 항목)");
+      showGhost((copy ? "+ " : "") + (t.text || "(빈 항목)"));
     });
     chip.addEventListener("drag", moveGhost);
     chip.addEventListener("dragend", () => {
@@ -443,7 +449,12 @@ document.addEventListener("click", (e) => {
 /* 칩 → 날짜 이동 */
 let dragData = null;
 function setupDropTarget(el, key) {
-  el.addEventListener("dragover", (e) => { if (!dragData) return; e.preventDefault(); el.classList.add("drop-target"); });
+  el.addEventListener("dragover", (e) => {
+    if (!dragData) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = (e.ctrlKey || e.metaKey || dragData.copy) ? "copy" : "move";
+    el.classList.add("drop-target");
+  });
   el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
   el.addEventListener("drop", (e) => {
     e.preventDefault(); el.classList.remove("drop-target");
@@ -452,7 +463,7 @@ function setupDropTarget(el, key) {
     if (dragData.type === "panelBlock") {
       const text = (dragData.text || "").trim();
       if (text) {
-        const it = { id: uid(), text, date: key, endDate: null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null };
+        const it = { id: uid(), text, date: key, endDate: null, start: null, end: null, categories: [], note: "", subtasks: [], star: false, done: false, doneDates: {}, recur: null };
         applyInlineSyntax(it);   // #태그·시간 자동 적용
         state.items.push(it);
       }
@@ -461,12 +472,27 @@ function setupDropTarget(el, key) {
       dragData = null;
       return;
     }
-    // 기존: 할 일 칩을 다른 날짜로 이동
-    if (dragData.from === key) return;
+    // 할 일 칩: Ctrl/⌘ → 복사, 아니면 이동
     const it = state.items.find((x) => x.id === dragData.id);
-    if (it) { it.date = key; save(); renderCalendar(); renderDayPanel(); }
+    if (it) {
+      const copy = e.ctrlKey || e.metaKey || dragData.copy;
+      if (copy) state.items.push(cloneItem(it, key));
+      else if (dragData.from !== key) it.date = key;
+      save(); renderCalendar(); renderDayPanel();
+    }
     dragData = null;
   });
+}
+/* 항목 복제(다른 날짜로 복사) — 단일 작업만 드래그 가능 */
+function cloneItem(src, newDate) {
+  return {
+    id: uid(), text: src.text, date: newDate, endDate: null,
+    start: src.start, end: src.end,
+    categories: [...(src.categories || [])],
+    note: src.note || "",
+    subtasks: (src.subtasks || []).map((s) => ({ id: uid(), text: s.text, done: s.done })),
+    star: src.star, done: false, doneDates: {}, recur: null,
+  };
 }
 function showGhost(t) { dragGhost.textContent = t; dragGhost.classList.add("show"); }
 function moveGhost(e) { if (e.clientX === 0 && e.clientY === 0) return; dragGhost.style.left = e.clientX + 14 + "px"; dragGhost.style.top = e.clientY + "px"; }
