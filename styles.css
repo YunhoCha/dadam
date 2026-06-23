@@ -145,6 +145,10 @@ body {
   flex:1; display:grid; grid-template-columns:repeat(7,1fr);
   grid-auto-rows:minmax(92px,1fr); gap:8px; min-height:0;
 }
+@keyframes calSlideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:none; } }
+@keyframes calSlideDown { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:none; } }
+.calendar-grid.slide-up { animation:calSlideUp .2s ease; }
+.calendar-grid.slide-down { animation:calSlideDown .2s ease; }
 .day {
   background:var(--white); border-radius:13px; padding:7px 9px; border:1.5px solid transparent;
   display:flex; flex-direction:column; gap:4px; cursor:pointer; overflow:hidden; position:relative;

@@ -213,7 +213,7 @@ function renderCatFilter() {
 function prevMY() { return viewMonth === 0 ? { y: viewYear - 1, m: 11 } : { y: viewYear, m: viewMonth - 1 }; }
 function nextMY() { return viewMonth === 11 ? { y: viewYear + 1, m: 0 } : { y: viewYear, m: viewMonth + 1 }; }
 
-function renderCalendar() {
+function renderCalendar(dir) {
   monthLabel.textContent = `${viewYear}년 ${MONTHS_KR[viewMonth]}`;
   grid.innerHTML = "";
   const startDow = new Date(viewYear, viewMonth, 1).getDay();
@@ -227,6 +227,8 @@ function renderCalendar() {
   // 마지막 주만 채움 → 보통 5주(필요한 달은 6주). 6주 고정보다 세로로 짧게
   while (cells.length % 7 !== 0) cells.push({ y: nm.y, m: nm.m, d: nd++, outside: true });
   for (const c of cells) grid.appendChild(makeDayCell(c));
+  // 월 이동 시 스르륵 슬라이드
+  if (dir) { grid.classList.remove("slide-up", "slide-down"); void grid.offsetWidth; grid.classList.add(dir === "down" ? "slide-up" : "slide-down"); }
 }
 
 function makeDayCell(c) {
@@ -287,10 +289,10 @@ function makeDayCell(c) {
     if (suppressDayClick) { suppressDayClick = false; return; }   // 기간 드래그 직후 클릭 무시
     selectDate(key);
   });
-  // 빈 영역 더블클릭 → 그 날짜에 할 일 빠르게 추가
+  // 빈 영역 더블클릭 → 그 날짜에 일정 추가(상세창)
   el.addEventListener("dblclick", (e) => {
     if (e.target.closest(".chip") || e.target.closest("button")) return;
-    selectDate(key); switchToDayTab(); addBlock();
+    addItemOnDate(key);
   });
   // 빈 영역 드래그 → 기간 선택
   el.addEventListener("mousedown", (e) => {
@@ -1197,8 +1199,22 @@ function jumpToDate(key) {
 /* ============================================================
    헤더 / 모달 공통 / 단축키
    ============================================================ */
-$("prevBtn").onclick = () => { const p = prevMY(); viewYear = p.y; viewMonth = p.m; renderCalendar(); };
-$("nextBtn").onclick = () => { const n = nextMY(); viewYear = n.y; viewMonth = n.m; renderCalendar(); };
+function gotoPrevMonth() { const p = prevMY(); viewYear = p.y; viewMonth = p.m; renderCalendar("up"); }
+function gotoNextMonth() { const n = nextMY(); viewYear = n.y; viewMonth = n.m; renderCalendar("down"); }
+$("prevBtn").onclick = gotoPrevMonth;
+$("nextBtn").onclick = gotoNextMonth;
+
+/* 캘린더 위에서 마우스 휠 → 월 이동 (스르륵). 좁은 화면은 일반 스크롤 유지 */
+let wheelCooldown = 0;
+grid.addEventListener("wheel", (e) => {
+  if (!window.matchMedia("(min-width: 861px)").matches) return;   // 모바일/좁은 화면은 페이지 스크롤
+  if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+  e.preventDefault();
+  const now = Date.now();
+  if (now - wheelCooldown < 360 || Math.abs(e.deltaY) < 6) return;
+  wheelCooldown = now;
+  e.deltaY > 0 ? gotoNextMonth() : gotoPrevMonth();
+}, { passive: false });
 $("todayBtn").onclick = () => { viewYear = today.getFullYear(); viewMonth = today.getMonth(); renderCalendar(); selectDate(todayKey); };
 $("addBlock").onclick = addBlock;
 
