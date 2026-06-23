@@ -527,6 +527,7 @@ body {
 .tok-cat { border-radius:5px; padding:0 5px; font-weight:700; color:var(--d,var(--sky-700)); background:var(--t,var(--sky-100)); }
 @keyframes timeFlash { 0% { background:var(--sky-200); } 100% { background:transparent; } }
 .block.time-flash { animation:timeFlash .7s ease; border-radius:9px; }
+.field-input.time-flash { animation:timeFlash .7s ease; }
 
 /* =========================================================
    글자·아이콘 크게 보기 (전체 키움 — 캘린더/작은 아이콘 강조)

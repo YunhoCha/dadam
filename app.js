@@ -509,7 +509,7 @@ function renderDayPanel() {
    스마트 입력 — #카테고리 드롭다운 + 시간 인식 색칠
    (한글 IME 보호: 연속 재렌더 없이 이산 이벤트만 사용)
    ============================================================ */
-let tagMenuEl = null, tagMenuCtx = null, tagMenuEditEl = null, tagMenuItem = null, tagMenuIndex = 0, tagMenuItems = [];
+let tagMenuEl = null, tagMenuEditEl = null, tagMenuInsert = null, tagMenuIndex = 0, tagMenuItems = [];
 
 function setupSmartInput(textEl, t) {
   textEl.addEventListener("input", () => { t.text = textEl.textContent; save(); updateTagMenu(textEl, t); });
@@ -560,17 +560,27 @@ function ensureTagMenu() {
   document.body.appendChild(tagMenuEl);
   return tagMenuEl;
 }
+/* contenteditable(블럭)용 */
 function updateTagMenu(textEl, t) {
   const ctx = getTagContext(textEl);
   if (!ctx) { hideTagMenu(); return; }
-  tagMenuCtx = ctx; tagMenuEditEl = textEl; tagMenuItem = t;
-  const q = ctx.partial.toLowerCase();
+  showTagMenuFor(textEl, ctx.partial, () => caretRect(textEl), (cat) => insertCategoryChip(textEl, ctx, cat, t));
+}
+function caretRect(fallbackEl) {
+  const s = window.getSelection();
+  let r = s.rangeCount ? s.getRangeAt(0).getBoundingClientRect() : null;
+  if (!r || (r.width === 0 && r.height === 0)) r = fallbackEl.getBoundingClientRect();
+  return r;
+}
+/* 공통: 메뉴 항목 구성 + 열기 (insertFn은 선택 시 실행) */
+function showTagMenuFor(editEl, partial, rectFn, insertFn) {
+  tagMenuEditEl = editEl; tagMenuInsert = insertFn;
+  const q = partial.toLowerCase();
   tagMenuItems = state.categories.filter((c) => c.label.toLowerCase().includes(q)).map((c) => ({ cat: c }));
-  const exact = state.categories.some((c) => c.label.toLowerCase() === q);
-  if (ctx.partial && !exact) tagMenuItems.push({ newName: ctx.partial });
+  if (partial && !state.categories.some((c) => c.label.toLowerCase() === q)) tagMenuItems.push({ newName: partial });
   if (!tagMenuItems.length) { hideTagMenu(); return; }
   tagMenuIndex = 0;
-  renderTagMenu(); positionTagMenu(textEl);
+  renderTagMenu(); positionTagMenu(rectFn());
 }
 function renderTagMenu() {
   const el = ensureTagMenu();
@@ -586,10 +596,7 @@ function renderTagMenu() {
   });
   el.hidden = false;
 }
-function positionTagMenu(textEl) {
-  const sel = window.getSelection();
-  let rect = sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
-  if (!rect || (rect.width === 0 && rect.height === 0)) rect = textEl.getBoundingClientRect();
+function positionTagMenu(rect) {
   const el = tagMenuEl;
   let left = Math.min(rect.left, window.innerWidth - el.offsetWidth - 10);
   let top = rect.bottom + 4;
@@ -598,14 +605,51 @@ function positionTagMenu(textEl) {
   el.style.top = Math.max(8, top) + "px";
 }
 function moveTagMenu(d) { tagMenuIndex = (tagMenuIndex + d + tagMenuItems.length) % tagMenuItems.length; renderTagMenu(); }
-function hideTagMenu() { if (tagMenuEl) tagMenuEl.hidden = true; tagMenuCtx = null; }
+function hideTagMenu() { if (tagMenuEl) tagMenuEl.hidden = true; tagMenuInsert = null; }
 function chooseTagMenu() {
-  if (!tagMenuItems.length || !tagMenuCtx) return;
+  if (!tagMenuItems.length || !tagMenuInsert) return;
   const it = tagMenuItems[tagMenuIndex];
   const id = it.cat ? it.cat.id : resolveCategory(it.newName);
   const cat = state.categories.find((c) => c.id === id);
-  insertCategoryChip(tagMenuEditEl, tagMenuCtx, cat, tagMenuItem);
+  tagMenuInsert(cat);
   hideTagMenu();
+}
+/* <input>(상세창 제목)용 — 인라인 칩 대신 값에 #이름 삽입 + 카테고리 지정 */
+function setupSmartField(inputEl, getItem) {
+  inputEl.addEventListener("input", () => updateTagMenuField(inputEl, getItem));
+  inputEl.addEventListener("keydown", (e) => {
+    const menuOpen = tagMenuEl && !tagMenuEl.hidden && tagMenuEditEl === inputEl;
+    if (menuOpen) {
+      if (e.key === "ArrowDown") { e.preventDefault(); moveTagMenu(1); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); moveTagMenu(-1); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); chooseTagMenu(); return; }
+      if (e.key === "Escape") { e.preventDefault(); hideTagMenu(); return; }
+    }
+    if (e.key === " " && !e.isComposing) {
+      const t = getItem(); if (!t) return;
+      const tm = parseTime(inputEl.value || "");
+      if (tm) { t.start = tm.start; save(); $("itemStart").value = tm.start; inputEl.classList.remove("time-flash"); void inputEl.offsetWidth; inputEl.classList.add("time-flash"); }
+    }
+  });
+  inputEl.addEventListener("blur", () => { setTimeout(() => { if (tagMenuEditEl === inputEl) hideTagMenu(); }, 150); });
+}
+function updateTagMenuField(inputEl, getItem) {
+  const pos = inputEl.selectionStart;
+  const before = inputEl.value.slice(0, pos);
+  const m = before.match(/#([^\s#]*)$/);
+  if (!m) { hideTagMenu(); return; }
+  const start = pos - m[0].length, end = pos;
+  showTagMenuFor(inputEl, m[1], () => inputEl.getBoundingClientRect(), (cat) => {
+    const t = getItem(); if (!t) return;
+    const v = inputEl.value, ins = "#" + cat.label + " ";
+    inputEl.value = v.slice(0, start) + ins + v.slice(end);
+    const np = start + ins.length;
+    inputEl.setSelectionRange(np, np);
+    t.categories ||= []; if (!t.categories.includes(cat.id)) t.categories.push(cat.id);
+    t.text = inputEl.value; save();
+    buildItemCats(); renderCatFilter();
+    inputEl.focus();
+  });
 }
 /* #partial 토큰을 카테고리 색 칩으로 바꾸고 카테고리 지정 */
 function insertCategoryChip(el, ctx, cat, t) {
@@ -775,6 +819,7 @@ function persistItem() {
   save(); renderCalendar(); renderDayPanel();
 }
 $("itemText").addEventListener("input", persistItem);
+setupSmartField($("itemText"), () => editingItem);   // 상세창 제목에 #카테고리 드롭다운
 $("itemText").addEventListener("blur", () => {
   if (!editingItem) return;
   if (applyInlineSyntax(editingItem)) {
