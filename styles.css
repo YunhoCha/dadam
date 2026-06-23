@@ -515,6 +515,19 @@ body {
 .qp-btn:hover { background:var(--sky-100); }
 @media (hover:none) { .qp-btn { opacity:.65; } }
 
+/* 스마트 입력: #카테고리 드롭다운 + 토큰 색칠 + 시간 인식 플래시 */
+.tag-menu {
+  position:fixed; z-index:1300; min-width:170px; max-width:250px; max-height:240px; overflow:auto;
+  background:var(--white); border:1px solid var(--line); border-radius:11px; box-shadow:var(--shadow-lg);
+  padding:5px; animation:popIn .12s ease;
+}
+.tag-row { display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:8px; cursor:pointer; font-size:13.5px; color:var(--ink); }
+.tag-row.on, .tag-row:hover { background:var(--sky-100); }
+.tag-row .dot { width:11px; height:11px; border-radius:50%; background:var(--c,var(--ink-mute)); flex-shrink:0; }
+.tok-cat { border-radius:5px; padding:0 5px; font-weight:700; color:var(--d,var(--sky-700)); background:var(--t,var(--sky-100)); }
+@keyframes timeFlash { 0% { background:var(--sky-200); } 100% { background:transparent; } }
+.block.time-flash { animation:timeFlash .7s ease; border-radius:9px; }
+
 /* =========================================================
    글자·아이콘 크게 보기 (전체 키움 — 캘린더/작은 아이콘 강조)
    ========================================================= */

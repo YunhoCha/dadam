@@ -505,6 +505,131 @@ function renderDayPanel() {
   renderQuickPanel();
 }
 
+/* ============================================================
+   스마트 입력 — #카테고리 드롭다운 + 시간 인식 색칠
+   (한글 IME 보호: 연속 재렌더 없이 이산 이벤트만 사용)
+   ============================================================ */
+let tagMenuEl = null, tagMenuCtx = null, tagMenuEditEl = null, tagMenuItem = null, tagMenuIndex = 0, tagMenuItems = [];
+
+function setupSmartInput(textEl, t) {
+  textEl.addEventListener("input", () => { t.text = textEl.textContent; save(); updateTagMenu(textEl, t); });
+  textEl.addEventListener("blur", () => {
+    setTimeout(() => { if (tagMenuEditEl === textEl) hideTagMenu(); }, 150);
+    if (applyInlineSyntax(t)) { save(); renderDayPanel(); renderCatFilter(); }
+    renderCalendar();
+  });
+  textEl.addEventListener("keydown", (e) => {
+    const menuOpen = tagMenuEl && !tagMenuEl.hidden && tagMenuEditEl === textEl;
+    if (menuOpen) {
+      if (e.key === "ArrowDown") { e.preventDefault(); moveTagMenu(1); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); moveTagMenu(-1); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); chooseTagMenu(); return; }
+      if (e.key === "Escape") { e.preventDefault(); hideTagMenu(); return; }
+    }
+    if (e.key === "Enter") { e.preventDefault(); hideTagMenu(); textEl.blur(); addBlock(); return; }
+    if (e.key === "Backspace" && textEl.textContent === "") { e.preventDefault(); removeItem(t.id); return; }
+    if (e.key === " " && !e.isComposing) flashTimeIfRecognized(textEl, t);
+  });
+}
+
+/* 시간 표현이 있으면 블럭을 잠깐 색칠해 '인식됨'을 알림 + 시작시간 설정 */
+function flashTimeIfRecognized(textEl, t) {
+  const tm = parseTime(textEl.textContent || "");
+  if (!tm) return;
+  t.start = tm.start; save();
+  const block = textEl.closest(".block");
+  if (block) { block.classList.remove("time-flash"); void block.offsetWidth; block.classList.add("time-flash"); }
+}
+
+/* ----- #카테고리 드롭다운 ----- */
+function getTagContext(el) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return null;
+  const r = sel.getRangeAt(0);
+  if (!r.collapsed || !el.contains(r.endContainer) || r.endContainer.nodeType !== 3) return null;
+  const before = r.endContainer.textContent.slice(0, r.endOffset);
+  const m = before.match(/#([^\s#]*)$/);
+  if (!m) return null;
+  return { node: r.endContainer, start: r.endOffset - m[0].length, end: r.endOffset, partial: m[1] };
+}
+function ensureTagMenu() {
+  if (tagMenuEl) return tagMenuEl;
+  tagMenuEl = document.createElement("div");
+  tagMenuEl.className = "tag-menu"; tagMenuEl.id = "tagMenu"; tagMenuEl.hidden = true;
+  tagMenuEl.addEventListener("mousedown", (e) => e.preventDefault());   // 입력칸 blur 방지
+  document.body.appendChild(tagMenuEl);
+  return tagMenuEl;
+}
+function updateTagMenu(textEl, t) {
+  const ctx = getTagContext(textEl);
+  if (!ctx) { hideTagMenu(); return; }
+  tagMenuCtx = ctx; tagMenuEditEl = textEl; tagMenuItem = t;
+  const q = ctx.partial.toLowerCase();
+  tagMenuItems = state.categories.filter((c) => c.label.toLowerCase().includes(q)).map((c) => ({ cat: c }));
+  const exact = state.categories.some((c) => c.label.toLowerCase() === q);
+  if (ctx.partial && !exact) tagMenuItems.push({ newName: ctx.partial });
+  if (!tagMenuItems.length) { hideTagMenu(); return; }
+  tagMenuIndex = 0;
+  renderTagMenu(); positionTagMenu(textEl);
+}
+function renderTagMenu() {
+  const el = ensureTagMenu();
+  el.innerHTML = "";
+  tagMenuItems.forEach((it, i) => {
+    const row = document.createElement("div");
+    row.className = "tag-row" + (i === tagMenuIndex ? " on" : "");
+    row.innerHTML = it.cat
+      ? `<i class="dot ${colorClass(it.cat.color)}"></i><span>${escapeHtml(it.cat.label)}</span>`
+      : `<i class="dot c-slate"></i><span>＋ '${escapeHtml(it.newName)}' 새 카테고리</span>`;
+    row.addEventListener("mousedown", (e) => { e.preventDefault(); tagMenuIndex = i; chooseTagMenu(); });
+    el.appendChild(row);
+  });
+  el.hidden = false;
+}
+function positionTagMenu(textEl) {
+  const sel = window.getSelection();
+  let rect = sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+  if (!rect || (rect.width === 0 && rect.height === 0)) rect = textEl.getBoundingClientRect();
+  const el = tagMenuEl;
+  let left = Math.min(rect.left, window.innerWidth - el.offsetWidth - 10);
+  let top = rect.bottom + 4;
+  if (top + el.offsetHeight > window.innerHeight - 8) top = rect.top - el.offsetHeight - 4;
+  el.style.left = Math.max(8, left) + "px";
+  el.style.top = Math.max(8, top) + "px";
+}
+function moveTagMenu(d) { tagMenuIndex = (tagMenuIndex + d + tagMenuItems.length) % tagMenuItems.length; renderTagMenu(); }
+function hideTagMenu() { if (tagMenuEl) tagMenuEl.hidden = true; tagMenuCtx = null; }
+function chooseTagMenu() {
+  if (!tagMenuItems.length || !tagMenuCtx) return;
+  const it = tagMenuItems[tagMenuIndex];
+  const id = it.cat ? it.cat.id : resolveCategory(it.newName);
+  const cat = state.categories.find((c) => c.id === id);
+  insertCategoryChip(tagMenuEditEl, tagMenuCtx, cat, tagMenuItem);
+  hideTagMenu();
+}
+/* #partial 토큰을 카테고리 색 칩으로 바꾸고 카테고리 지정 */
+function insertCategoryChip(el, ctx, cat, t) {
+  const node = ctx.node, full = node.textContent;
+  const before = full.slice(0, ctx.start), after = full.slice(ctx.end);
+  const frag = document.createDocumentFragment();
+  if (before) frag.appendChild(document.createTextNode(before));
+  const chip = document.createElement("span");
+  chip.className = "tok-cat " + colorClass(cat.color);
+  chip.contentEditable = "false";
+  chip.textContent = "#" + cat.label;
+  frag.appendChild(chip);
+  const sp = document.createTextNode(" " + after);
+  frag.appendChild(sp);
+  node.parentNode.replaceChild(frag, node);
+  const range = document.createRange();
+  range.setStart(sp, 1); range.collapse(true);
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(range);
+  t.categories ||= [];
+  if (!t.categories.includes(cat.id)) t.categories.push(cat.id);
+  t.text = el.textContent; save();
+  renderCatFilter();
+}
+
 function makeBlock(t, key) {
   const el = document.createElement("div");
   el.className = "block" + (isDone(t, key) ? " done" : "");
@@ -526,15 +651,7 @@ function makeBlock(t, key) {
   const text = document.createElement("div");
   text.className = "block-text"; text.contentEditable = "true"; text.dataset.ph = "할 일 입력…";
   text.textContent = t.text;
-  text.addEventListener("input", () => { t.text = text.textContent; save(); });
-  text.addEventListener("blur", () => {
-    if (applyInlineSyntax(t)) { save(); renderDayPanel(); renderCatFilter(); }
-    renderCalendar();
-  });
-  text.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); text.blur(); addBlock(); }
-    if (e.key === "Backspace" && text.textContent === "") { e.preventDefault(); removeItem(t.id); }
-  });
+  setupSmartInput(text, t);
   main.appendChild(text);
 
   const meta = document.createElement("div");
