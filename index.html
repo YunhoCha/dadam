@@ -45,6 +45,8 @@
 
     <!-- 우측 패널 -->
     <section class="side-panel">
+      <!-- 모바일 시트 핸들(아래로 끌어내리거나 탭하면 닫힘) -->
+      <div class="sheet-handle" id="sheetHandle"></div>
       <!-- 탭 -->
       <div class="panel-tabs" id="panelTabs">
         <button class="ptab on" data-tab="day"><span>🗓️</span> 일정 · 할 일</button>
@@ -130,6 +132,7 @@
       <button class="mtab" data-mview="memo"><span>📝</span>메모</button>
       <button class="mtab" data-mview="block"><span>📥</span>블럭</button>
     </nav>
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
   </div>
 
   <!-- ===== 할 일/일정 상세 모달 ===== -->

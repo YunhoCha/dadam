@@ -341,7 +341,7 @@ function makeDayCell(c) {
     if (e.target.closest(".chip")) return;
     if (suppressDayClick) { suppressDayClick = false; return; }   // 기간 드래그/스와이프 직후 클릭 무시
     selectDate(key);
-    if (isMobile()) setMobileView("day");   // 모바일: 그 날 풀스크린 보기로
+    if (isMobile()) openDaySheet();   // 모바일: 그 날 상세를 하단 시트로
   });
   // 빈 영역 더블클릭 → 그 날짜에 일정 추가(상세창)
   el.addEventListener("dblclick", (e) => {
@@ -427,9 +427,9 @@ function makeChip(t, key) {
     return chip;
   }
 
-  const time = t.start ? `<b>${t.start}</b> ` : "";
-  const star = t.star ? "★ " : "";
-  const rec = t.recur ? " ↻" : "";
+  const time = t.start ? `<span class="c-meta"><b>${t.start}</b> </span>` : "";
+  const star = t.star ? `<span class="c-meta">★ </span>` : "";
+  const rec = t.recur ? `<span class="c-meta"> ↻</span>` : "";
   const dots = cats.length
     ? `<span class="chip-cats">${cats.map((c) => `<i class="cdot ${colorClass(c.color)}"></i>`).join("")}</span>`
     : "";
@@ -1289,8 +1289,18 @@ function setMobileView(view) {
     if (qp) requestAnimationFrame(() => qp.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 }
-document.querySelectorAll(".mtab").forEach((t) => t.addEventListener("click", () => setMobileView(t.dataset.mview)));
+document.querySelectorAll(".mtab").forEach((t) => t.addEventListener("click", () => { closeDaySheet(); setMobileView(t.dataset.mview); }));
 if (isMobile()) document.body.classList.add("mv-cal");
+
+/* 모바일: 날짜 탭 시 그 날 상세(할 일·일지)를 하단 시트로 */
+function openDaySheet() {
+  document.querySelectorAll(".ptab").forEach((t) => t.classList.toggle("on", t.dataset.tab === "day"));
+  document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("on", p.dataset.pane === "day"));
+  document.body.classList.add("day-sheet");
+}
+function closeDaySheet() { document.body.classList.remove("day-sheet"); }
+$("sheetBackdrop").addEventListener("click", closeDaySheet);
+$("sheetHandle").addEventListener("click", closeDaySheet);
 window.addEventListener("resize", () => {
   if (isMobile() && !document.body.classList.contains("mv-cal") && !document.body.classList.contains("mv-day") && !document.body.classList.contains("mv-memo")) {
     document.body.classList.add("mv-cal");
