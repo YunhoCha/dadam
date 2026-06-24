@@ -24,6 +24,7 @@ body {
   grid-template-rows:100vh; height:100vh; gap:0;
 }
 .main { overflow:hidden; }   /* 캘린더가 화면 높이를 넘기지 않게 → 셀에 들어가는 만큼만 칩 표시 */
+.mobile-bar { display:none; }   /* 데스크톱 숨김 (모바일에서만 표시) */
 
 /* 색상 클래스 (--c = 대표색, --t = 연한 배경) */
 .c-sky   { --c:var(--sky-500); --t:var(--sky-100); --d:var(--sky-700); }
@@ -508,11 +509,51 @@ body {
 }
 @media (max-width:860px) {
   body { overflow-y:auto; }
-  .app { display:flex; flex-direction:column; min-height:100vh; height:auto; grid-template-rows:none; }
-  .main { padding:16px 14px; overflow:visible; }
-  .side-panel { border-left:none; border-top:1px solid var(--line); height:auto; }
+  .app { display:flex; flex-direction:column; min-height:100vh; height:auto; grid-template-rows:none; padding-bottom:64px; }
+  .main { padding:16px 14px 8px; overflow:visible; }
+  .side-panel { border-left:none; border-top:none; height:auto; }
   .tab-pane.on { overflow:visible; }
   .block-list, .memo-list { max-height:none; }
+
+  /* 하단 탭바 */
+  .mobile-bar {
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:900;
+    background:rgba(255,255,255,.93); backdrop-filter:blur(12px);
+    border-top:1px solid var(--line); box-shadow:0 -4px 16px rgba(58,134,212,.1);
+    padding:4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+  .mtab {
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 4px;
+    border:none; background:transparent; font-family:inherit; font-size:11px; font-weight:600;
+    color:var(--ink-mute); cursor:pointer; border-radius:12px; transition:.14s;
+  }
+  .mtab span { font-size:20px; line-height:1; }
+  .mtab.on { color:var(--sky-700); background:var(--sky-50); }
+
+  /* 한 화면에 한 뷰만 (하단 탭으로 전환) */
+  .panel-tabs { display:none; }
+  body.mv-cal .side-panel { display:none; }
+  body.mv-day .main, body.mv-memo .main { display:none; }
+  body.mv-day .side-panel, body.mv-memo .side-panel { display:flex; }
+  .side-panel { min-height:calc(100vh - 70px); }
+  body.mv-cal .main { min-height:calc(100vh - 70px); }
+
+  /* 더 큰 터치 타깃 + 여백 */
+  .ptab { padding:13px; font-size:14.5px; }
+  .icon-btn { width:40px; height:40px; }
+  .icon-btn.sm { width:34px; height:34px; font-size:19px; }
+  .ghost-btn { padding:9px 14px; }
+  .block { padding:9px 6px; gap:9px; }
+  .block-check { width:24px; height:24px; }
+  .block-check.checked::after { font-size:15px; }
+  .mini-btn { padding:8px 12px; font-size:13.5px; }
+  .chip { padding:6px 9px; }
+  .chip-check { width:18px; height:18px; }
+  .day-add { opacity:.6; width:26px; height:26px; font-size:18px; }
+  .qp-text, .bsub-text { padding:7px 2px; }
+  .add-block { padding:14px; }
+  .cat-opt { padding:8px 13px; }
+  .mood { font-size:26px; }
 }
 @media (max-width:560px) {
   .cal-title h2 { font-size:19px; }

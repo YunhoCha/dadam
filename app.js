@@ -339,8 +339,9 @@ function makeDayCell(c) {
 
   el.addEventListener("click", (e) => {
     if (e.target.closest(".chip")) return;
-    if (suppressDayClick) { suppressDayClick = false; return; }   // 기간 드래그 직후 클릭 무시
+    if (suppressDayClick) { suppressDayClick = false; return; }   // 기간 드래그/스와이프 직후 클릭 무시
     selectDate(key);
+    if (isMobile()) setMobileView("day");   // 모바일: 그 날 풀스크린 보기로
   });
   // 빈 영역 더블클릭 → 그 날짜에 일정 추가(상세창)
   el.addEventListener("dblclick", (e) => {
@@ -1268,6 +1269,50 @@ grid.addEventListener("wheel", (e) => {
   wheelCooldown = now;
   e.deltaY > 0 ? gotoNextMonth() : gotoPrevMonth();
 }, { passive: false });
+
+/* ============================================================
+   모바일 — 하단 탭바 / 단일 뷰 / 좌우 스와이프 월 이동
+   ============================================================ */
+const isMobile = () => window.matchMedia("(max-width: 860px)").matches;
+function setMobileView(view) {
+  const cls = view === "memo" ? "mv-memo" : (view === "cal" ? "mv-cal" : "mv-day");
+  document.body.classList.remove("mv-cal", "mv-day", "mv-memo");
+  document.body.classList.add(cls);
+  document.querySelectorAll(".mtab").forEach((t) => t.classList.toggle("on", t.dataset.mview === view));
+  if (view !== "cal") {
+    const pane = view === "memo" ? "memo" : "day";
+    document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("on", p.dataset.pane === pane));
+  }
+  window.scrollTo(0, 0);
+  if (view === "block") {
+    const qp = document.querySelector(".quick-panel");
+    if (qp) requestAnimationFrame(() => qp.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+}
+document.querySelectorAll(".mtab").forEach((t) => t.addEventListener("click", () => setMobileView(t.dataset.mview)));
+if (isMobile()) document.body.classList.add("mv-cal");
+window.addEventListener("resize", () => {
+  if (isMobile() && !document.body.classList.contains("mv-cal") && !document.body.classList.contains("mv-day") && !document.body.classList.contains("mv-memo")) {
+    document.body.classList.add("mv-cal");
+  }
+});
+
+/* 좌우 스와이프로 월 이동 (모바일) */
+let touchX = null, touchY = null;
+grid.addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 1) { touchX = null; return; }
+  touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
+}, { passive: true });
+grid.addEventListener("touchend", (e) => {
+  if (touchX == null) return;
+  const dx = e.changedTouches[0].clientX - touchX;
+  const dy = e.changedTouches[0].clientY - touchY;
+  touchX = null;
+  if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+    suppressDayClick = true; setTimeout(() => { suppressDayClick = false; }, 120);   // 스와이프가 날짜 탭으로 오인되지 않게
+    dx < 0 ? gotoNextMonth() : gotoPrevMonth();
+  }
+}, { passive: true });
 $("todayBtn").onclick = () => { viewYear = today.getFullYear(); viewMonth = today.getMonth(); renderCalendar(); selectDate(todayKey); };
 $("addBlock").onclick = addBlock;
 
