@@ -34,9 +34,10 @@ function normalizeState(s) {
   s.notes      ||= [];
   s.journals   ||= {};
   s.categories ||= DEFAULT_CATS.map((c) => ({ ...c }));
-  s.inbox   ||= [];   // 임시 메모 블럭 [{id,text}]
-  s.weekly  ||= {};   // 주 단위: { 일요일키: [{id,text}] }
-  s.monthly ||= {};   // 월 단위: { "YYYY-MM": [{id,text}] }
+  s.inbox    ||= [];  // 임시 메모 블럭 [{id,text}]
+  s.weekly   ||= {};  // 주 단위: { 일요일키: [{id,text}] }
+  s.monthly  ||= {};  // 월 단위: { "YYYY-MM": [{id,text}] }
+  s.projects ||= [];  // 프로젝트 [{id,name,collapsed}] — 할 일은 items에 projectId로 연결(카테고리와 별개)
   for (const it of s.items) {
     if (!Array.isArray(it.categories)) it.categories = it.category != null ? [it.category] : [];
     if (!Array.isArray(it.subtasks)) it.subtasks = [];
@@ -305,6 +306,16 @@ function makeDayCell(c) {
   }
   const tools = document.createElement("div");
   tools.className = "day-tools";
+  // 일지 작성 표시 — 글이 있거나 기분이 찍혀 있으면 작은 아이콘
+  const jr = state.journals[key];
+  if (jr && (jr.mood || stripHtml(jr.text))) {
+    const ji = document.createElement("button");
+    ji.className = "journal-ind";
+    ji.textContent = jr.mood ? MOODS[jr.mood - 1] : "📔";
+    ji.title = "일지 보기";
+    ji.onclick = (e) => { e.stopPropagation(); selectDate(key); if (isMobile()) openDaySheet(); };
+    tools.appendChild(ji);
+  }
   // 연결된 메모 아이콘
   const linkedNotes = state.notes.filter((n) => n.linkDate === key);
   if (linkedNotes.length) {
@@ -416,7 +427,8 @@ function makeChip(t, key) {
   let cls = `chip item-chip ${cats[0] ? colorClass(cats[0].color) : "c-sky"}` + (done ? " done" : "");
   if (range) cls += " range-chip" + (isStart ? " r-start" : "") + (isEnd ? " r-end" : "");
   chip.className = cls;
-  chip.title = (t.text || "(빈 항목)") + (range ? ` · ${t.date.slice(5)}~${(t.endDate).slice(5)}` : "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "");
+  const proj = t.projectId ? projectById(t.projectId) : null;
+  chip.title = (t.text || "(빈 항목)") + (range ? ` · ${t.date.slice(5)}~${(t.endDate).slice(5)}` : "") + (cats.length ? ` · ${cats.map((c) => c.label).join(", ")}` : "") + (proj ? ` · 📁${proj.name || "프로젝트"}` : "");
 
   // 칩 클릭 → 상세 모달(메모 포함)
   chip.addEventListener("click", (e) => { e.stopPropagation(); selectDate(key); openItemModal(t); });
@@ -790,6 +802,7 @@ function makeBlock(t, key) {
     if (c) meta.innerHTML += `<span class="m-cat ${colorClass(c.color)}"><i class="dot"></i>${escapeHtml(c.label)}</span>`;
   }
   if (t.recur) meta.innerHTML += `<span class="m-rec">↻ ${t.recur.freq === "biweekly" ? "격주" : "매주"}</span>`;
+  if (t.projectId) { const p = projectById(t.projectId); if (p) meta.innerHTML += `<span class="m-proj">📁 ${escapeHtml(p.name) || "프로젝트"}</span>`; }
   if (t.note && t.note.trim()) meta.innerHTML += `<span class="m-note">📝 노트</span>`;
   const subs = t.subtasks || [];
   if (subs.length) meta.innerHTML += `<span class="m-step">☑ ${subs.filter((s) => s.done).length}/${subs.length}</span>`;
@@ -1224,7 +1237,16 @@ gSearch.addEventListener("input", () => {
   if (!q) { gResults.hidden = true; gResults.innerHTML = ""; return; }
   const res = [];
   for (const it of state.items)
-    if ((it.text || "").toLowerCase().includes(q)) res.push({ type: "할 일", icon: "✓", label: it.text, date: it.date, action: () => jumpToDate(it.date) });
+    if ((it.text || "").toLowerCase().includes(q)) {
+      const proj = it.projectId ? projectById(it.projectId) : null;
+      res.push({
+        type: proj ? "프로젝트" : "할 일",
+        icon: proj ? "📁" : "✓",
+        label: proj && proj.name ? `${it.text} · ${proj.name}` : it.text,
+        date: it.date,
+        action: () => (it.date ? jumpToDate(it.date) : openProjectPanel(it.projectId)),
+      });
+    }
   for (const d of state.deadlines)
     if ((d.title || "").toLowerCase().includes(q)) res.push({ type: "마감", icon: "⏰", label: d.title, date: d.date, action: () => openDeadlineModal(d) });
   for (const n of state.notes)
@@ -1245,6 +1267,7 @@ gSearch.addEventListener("input", () => {
 });
 document.addEventListener("click", (e) => { if (!e.target.closest(".global-search")) gResults.hidden = true; });
 function jumpToDate(key) {
+  if (!key) return;
   const d = parseKey(key);
   viewYear = d.getFullYear(); viewMonth = d.getMonth();
   renderCalendar(); selectDate(key);
@@ -1432,6 +1455,9 @@ function currentQuickList() {
 }
 function renderQuickPanel() {
   document.querySelectorAll(".qp-tab").forEach((t) => t.classList.toggle("on", t.dataset.qp === qpTab));
+  const isProj = qpTab === "project";
+  $("qpAdd").innerHTML = isProj ? `<span>＋</span> 프로젝트 추가` : `<span>＋</span> 블럭 추가 <kbd>Enter</kbd>`;
+  if (isProj) { $("qpContext").textContent = `${state.projects.length}개`; renderProjects(); return; }
   const ctx = selectedKey || todayKey;
   const ctxEl = $("qpContext");
   if (qpTab === "inbox") ctxEl.textContent = "아무거나 임시로";
@@ -1499,7 +1525,136 @@ function blockToMemo(blk, list) {
   openMemo(n.id);   // 메모 편집창 열어 확인
 }
 document.querySelectorAll(".qp-tab").forEach((tab) => tab.addEventListener("click", () => { qpTab = tab.dataset.qp; renderQuickPanel(); }));
-$("qpAdd").addEventListener("click", addQuickBlock);
+$("qpAdd").addEventListener("click", () => { qpTab === "project" ? addProject() : addQuickBlock(); });
+
+/* ============================================================
+   프로젝트 — 카테고리와 별개. 프로젝트별 할 일 모음.
+   할 일은 state.items에 projectId로 연결 → 날짜를 지정하면
+   기존 캘린더/할 일 파이프라인으로 자동 표시된다.
+   ============================================================ */
+function projectById(id) { return (state.projects || []).find((p) => p.id === id) || null; }
+function itemsForProject(pid) {
+  return state.items.filter((it) => it.projectId === pid).sort((a, b) => {
+    const ad = a.date || "9999", bd = b.date || "9999";   // 날짜 없는 건 아래로
+    if (ad !== bd) return ad < bd ? -1 : 1;
+    return 0;
+  });
+}
+function addProject() {
+  const p = { id: uid(), name: "", collapsed: false };
+  state.projects.push(p);
+  save(); renderQuickPanel();
+  requestAnimationFrame(() => { const el = $("qpList").querySelector(`.proj-card[data-pid="${p.id}"] .proj-name`); el && el.focus(); });
+}
+function deleteProject(p) {
+  const items = itemsForProject(p.id);
+  const msg = `'${p.name || "이 프로젝트"}'를 삭제할까요?` + (items.length ? `\n연결된 할 일 ${items.length}개도 함께 삭제됩니다.` : "");
+  if (!confirm(msg)) return;
+  state.projects = state.projects.filter((x) => x.id !== p.id);
+  state.items = state.items.filter((it) => it.projectId !== p.id);
+  save(); renderQuickPanel(); renderCalendar(); renderDayPanel();
+}
+function addProjectTodo(pid, focus) {
+  const it = { id: uid(), text: "", date: null, endDate: null, start: null, end: null, categories: [], note: "", star: false, done: false, doneDates: {}, recur: null, projectId: pid };
+  state.items.push(it);
+  save(); renderProjects();
+  if (focus) requestAnimationFrame(() => { const ts = $("qpList").querySelector(`.proj-card[data-pid="${pid}"] .proj-todo:last-child .pt-text`); ts && ts.focus(); });
+}
+function renderProjects() {
+  const wrap = $("qpList"); wrap.innerHTML = "";
+  if (state.projects.length === 0) {
+    wrap.innerHTML = `<div class="qp-empty">＋ 로 프로젝트를 만들어요. 각 프로젝트마다 할 일을 담고, 날짜를 정하면 달력에도 표시돼요.</div>`;
+    return;
+  }
+  state.projects.forEach((p) => wrap.appendChild(makeProjectCard(p)));
+}
+function makeProjectCard(p) {
+  const card = document.createElement("div");
+  card.className = "proj-card"; card.dataset.pid = p.id;
+
+  const head = document.createElement("div");
+  head.className = "proj-head";
+
+  const caret = document.createElement("button");
+  caret.className = "proj-caret"; caret.textContent = p.collapsed ? "▸" : "▾"; caret.title = "접기/펴기";
+  caret.onclick = () => { p.collapsed = !p.collapsed; save(); renderProjects(); };
+
+  const name = document.createElement("div");
+  name.className = "proj-name"; name.contentEditable = "true"; name.dataset.ph = "프로젝트 이름…";
+  name.textContent = p.name;
+  name.addEventListener("input", () => { p.name = name.textContent; save(); });
+  name.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); name.blur(); } });
+
+  const items = itemsForProject(p.id);
+  const doneN = items.filter((it) => it.done).length;
+  const count = document.createElement("span");
+  count.className = "proj-count"; count.textContent = items.length ? `${doneN}/${items.length}` : "";
+
+  const del = document.createElement("button");
+  del.className = "proj-del"; del.textContent = "🗑"; del.title = "프로젝트 삭제";
+  del.onclick = () => deleteProject(p);
+
+  head.append(caret, name, count, del);
+  card.appendChild(head);
+
+  if (!p.collapsed) {
+    const list = document.createElement("div");
+    list.className = "proj-todos";
+    items.forEach((it) => list.appendChild(makeProjectTodo(it)));
+    card.appendChild(list);
+
+    const add = document.createElement("button");
+    add.className = "proj-add"; add.innerHTML = `<span>＋</span> 할 일`;
+    add.onclick = () => addProjectTodo(p.id, true);
+    card.appendChild(add);
+  }
+  return card;
+}
+function makeProjectTodo(it) {
+  const row = document.createElement("div");
+  row.className = "proj-todo" + (it.done ? " done" : "");
+
+  const check = document.createElement("div");
+  check.className = "pt-check" + (it.done ? " checked" : "");
+  check.onclick = () => { it.done = !it.done; save(); renderProjects(); renderCalendar(); renderDayPanel(); };
+
+  const text = document.createElement("div");
+  text.className = "pt-text"; text.contentEditable = "true"; text.dataset.ph = "할 일 입력…";
+  text.textContent = it.text;
+  text.addEventListener("input", () => { it.text = text.textContent; save(); });
+  text.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); text.blur(); addProjectTodo(it.projectId, true); }
+    if (e.key === "Backspace" && text.textContent === "") { e.preventDefault(); state.items = state.items.filter((x) => x !== it); save(); renderProjects(); renderCalendar(); renderDayPanel(); }
+  });
+
+  const date = document.createElement("input");
+  date.type = "date"; date.className = "pt-date" + (it.date ? " set" : ""); date.value = it.date || ""; date.title = "날짜 지정 시 달력에 표시";
+  date.addEventListener("change", () => {
+    it.date = date.value || null; it.endDate = null;
+    save(); renderProjects(); renderCalendar(); renderDayPanel();
+  });
+
+  const edit = document.createElement("button");
+  edit.className = "pt-btn"; edit.textContent = "⚙"; edit.title = "상세(카테고리·시간·단계)";
+  edit.onclick = () => openItemModal(it);
+
+  const del = document.createElement("button");
+  del.className = "pt-btn"; del.textContent = "✕"; del.title = "삭제";
+  del.onclick = () => { state.items = state.items.filter((x) => x !== it); save(); renderProjects(); renderCalendar(); renderDayPanel(); };
+
+  row.append(check, text, date, edit, del);
+  return row;
+}
+/* 검색 등에서 프로젝트 탭으로 이동 */
+function openProjectPanel(pid) {
+  qpTab = "project";
+  if (isMobile()) { closeDaySheet(); setMobileView("block"); } else { switchToDayTab(); }
+  renderQuickPanel();
+  if (pid) requestAnimationFrame(() => {
+    const card = $("qpList").querySelector(`.proj-card[data-pid="${pid}"]`);
+    card && card.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
 
 /* ============================================================
    카테고리 설정 (추가 / 이름 변경 / 색 / 삭제)
