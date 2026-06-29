@@ -540,6 +540,13 @@ function setupDropTarget(el, key) {
       dragData = null;
       return;
     }
+    // 프로젝트 할 일 → 이 날짜로 일정 잡기(프로젝트에 그대로 남고 캘린더에도 표시)
+    if (dragData.type === "projectTodo") {
+      const it = state.items.find((x) => x.id === dragData.id);
+      if (it) { it.date = key; it.endDate = null; save(); renderCalendar(); renderDayPanel(); renderQuickPanel(); }
+      dragData = null;
+      return;
+    }
     // 할 일 칩: Ctrl/⌘ → 복사, 아니면 이동
     const it = state.items.find((x) => x.id === dragData.id);
     if (it) {
@@ -1608,11 +1615,47 @@ function makeProjectCard(p) {
     add.onclick = () => addProjectTodo(p.id, true);
     card.appendChild(add);
   }
+
+  // 이 카드에 드롭 — 캘린더 칩/빠른블럭/다른 프로젝트 할 일을 이 프로젝트로 편입
+  card.addEventListener("dragover", (e) => {
+    if (!dragData) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "move"; card.classList.add("drop-target");
+  });
+  card.addEventListener("dragleave", (e) => { if (!card.contains(e.relatedTarget)) card.classList.remove("drop-target"); });
+  card.addEventListener("drop", (e) => {
+    e.preventDefault(); card.classList.remove("drop-target");
+    if (!dragData) return;
+    if (dragData.type === "panelBlock") {                      // 빠른블럭 → 이 프로젝트의 할 일(날짜 없음)
+      const text = (dragData.text || "").trim();
+      if (text) { const it = { id: uid(), text, date: null, endDate: null, start: null, end: null, categories: [], note: "", subtasks: [], star: false, done: false, doneDates: {}, recur: null, projectId: p.id }; applyInlineSyntax(it); state.items.push(it); }
+      dragData.remove(); save(); renderQuickPanel(); renderCalendar(); renderDayPanel(); renderCatFilter(); dragData = null; return;
+    }
+    const it = state.items.find((x) => x.id === dragData.id);
+    if (it) {
+      it.projectId = p.id;
+      if (dragData.type !== "projectTodo") { it.date = null; it.endDate = null; }   // 캘린더 칩 → 프로젝트: 날짜 비워 달력에서 내림
+      save(); renderQuickPanel(); renderCalendar(); renderDayPanel();
+    }
+    dragData = null;
+  });
   return card;
 }
 function makeProjectTodo(it) {
   const row = document.createElement("div");
   row.className = "proj-todo" + (it.done ? " done" : "");
+
+  // 드래그 핸들 — 캘린더 날짜로 끌어 놓으면 날짜가 지정된다
+  const handle = document.createElement("div");
+  handle.className = "pt-handle"; handle.textContent = "⠿"; handle.title = "캘린더로 드래그 → 날짜 지정"; handle.draggable = true;
+  handle.addEventListener("dragstart", (e) => {
+    dragData = { type: "projectTodo", id: it.id };
+    e.dataTransfer.effectAllowed = "move";
+    const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+    e.dataTransfer.setDragImage(img, 0, 0);
+    showGhost(it.text || "(빈 할 일)");
+  });
+  handle.addEventListener("drag", moveGhost);
+  handle.addEventListener("dragend", () => { hideGhost(); document.querySelectorAll(".day.drop-target, .proj-card.drop-target").forEach((d) => d.classList.remove("drop-target")); });
 
   const check = document.createElement("div");
   check.className = "pt-check" + (it.done ? " checked" : "");
@@ -1642,7 +1685,7 @@ function makeProjectTodo(it) {
   del.className = "pt-btn"; del.textContent = "✕"; del.title = "삭제";
   del.onclick = () => { state.items = state.items.filter((x) => x !== it); save(); renderProjects(); renderCalendar(); renderDayPanel(); };
 
-  row.append(check, text, date, edit, del);
+  row.append(handle, check, text, date, edit, del);
   return row;
 }
 /* 검색 등에서 프로젝트 탭으로 이동 */
