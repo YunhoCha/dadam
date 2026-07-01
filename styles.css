@@ -20,10 +20,15 @@ body {
   min-height:100vh; overflow-x:hidden; overflow-y:auto;
 }
 .app {
-  display:grid; grid-template-columns:minmax(0,1fr) 460px;
+  display:grid; grid-template-columns:minmax(0,1fr) 7px var(--panel-w,460px);
   grid-template-rows:100vh; height:100vh; gap:0;
 }
 .main { overflow:hidden; }   /* 캘린더가 화면 높이를 넘기지 않게 → 셀에 들어가는 만큼만 칩 표시 */
+/* 달력 ↔ 우측 패널 폭 조절 구분선 */
+.col-resizer { position:relative; cursor:col-resize; touch-action:none; z-index:20; }
+.col-resizer::before { content:""; position:absolute; top:0; bottom:0; left:2px; right:2px; border-radius:3px; background:transparent; transition:background .15s; }
+.col-resizer:hover::before, body.col-resizing .col-resizer::before { background:var(--sky-300); }
+body.col-resizing { cursor:col-resize; user-select:none; }
 .mobile-bar { display:none; }   /* 데스크톱 숨김 (모바일에서만 표시) */
 .sheet-handle, .sheet-backdrop { display:none; }
 @keyframes sheetUp { from { transform:translateY(100%); } to { transform:none; } }
@@ -533,11 +538,12 @@ body {
 
 /* ============ 반응형 ============ */
 @media (max-width:1120px) {
-  .app { grid-template-columns:minmax(0,1fr) 400px; }
+  .app { grid-template-columns:minmax(0,1fr) 7px var(--panel-w,400px); }
   .main { padding:20px 18px; }
 }
 @media (max-width:860px) {
   body { overflow-y:auto; }
+  .col-resizer { display:none; }
   .app { display:flex; flex-direction:column; min-height:100vh; height:auto; grid-template-rows:none; padding-bottom:64px; }
   .main { padding:16px 14px 8px; overflow:visible; }
   .side-panel { border-left:none; border-top:none; height:auto; }

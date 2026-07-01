@@ -1616,13 +1616,13 @@ function makeRefBlock(blk, list) {
   handle.className = "qp-handle"; handle.textContent = "⠿"; handle.title = "달력으로 드래그 → 날짜 지정"; handle.draggable = true;
   handle.addEventListener("dragstart", (e) => {
     dragData = { type: "projectTodo", id: it.id };
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.effectAllowed = "copyMove";
     const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
     e.dataTransfer.setDragImage(img, 0, 0);
     showGhost(it.text || "(빈 할 일)");
   });
   handle.addEventListener("drag", moveGhost);
-  handle.addEventListener("dragend", () => { hideGhost(); document.querySelectorAll(".day.drop-target, .proj-card.drop-target").forEach((d) => d.classList.remove("drop-target")); });
+  handle.addEventListener("dragend", () => { hideGhost(); document.querySelectorAll(".day.drop-target, .proj-card.drop-target, .qp-tab.qp-tab-drop, .qp-list.qp-drop").forEach((d) => d.classList.remove("drop-target", "qp-tab-drop", "qp-drop")); });
 
   const check = document.createElement("div");
   check.className = "qp-check" + (it.done ? " checked" : "");
@@ -1714,6 +1714,39 @@ $("qpAdd").addEventListener("click", () => { qpTab === "project" ? addProject() 
     if (!list.some((b) => b.ref === dragData.id)) list.push({ id: uid(), ref: dragData.id });
     save(); renderQuickPanel();
     dragData = null;
+  });
+})();
+
+/* 달력 ↔ 우측 패널 폭 조절 (구분선 드래그) — 로컬에만 저장, 동기화 대상 아님 */
+(function setupColResizer() {
+  const rz = $("colResizer"); if (!rz) return;
+  const KEY = "dadam.panelW", MIN = 320, MAX = 780;
+  const saved = parseInt(localStorage.getItem(KEY), 10);
+  if (saved) document.documentElement.style.setProperty("--panel-w", Math.max(MIN, Math.min(MAX, saved)) + "px");
+  let dragging = false;
+  rz.addEventListener("pointerdown", (e) => {
+    dragging = true; rz.setPointerCapture(e.pointerId);
+    document.body.classList.add("col-resizing"); e.preventDefault();
+  });
+  rz.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const w = Math.max(MIN, Math.min(MAX, window.innerWidth - e.clientX));
+    document.documentElement.style.setProperty("--panel-w", w + "px");
+    scheduleTrim();   // 셀 폭이 바뀌므로 칩 다시 배치
+  });
+  const end = (e) => {
+    if (!dragging) return; dragging = false;
+    document.body.classList.remove("col-resizing");
+    try { rz.releasePointerCapture(e.pointerId); } catch {}
+    const w = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--panel-w"), 10);
+    if (w) localStorage.setItem(KEY, w);
+    trimDayChips();
+  };
+  rz.addEventListener("pointerup", end);
+  rz.addEventListener("pointercancel", end);
+  rz.addEventListener("dblclick", () => {   // 더블클릭 → 기본 폭으로 리셋
+    document.documentElement.style.removeProperty("--panel-w");
+    localStorage.removeItem(KEY); trimDayChips();
   });
 })();
 
@@ -1849,13 +1882,13 @@ function makeProjectTodo(it) {
   handle.className = "pt-handle"; handle.textContent = "⠿"; handle.title = "캘린더로 드래그 → 날짜 지정"; handle.draggable = true;
   handle.addEventListener("dragstart", (e) => {
     dragData = { type: "projectTodo", id: it.id };
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.effectAllowed = "copyMove";
     const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
     e.dataTransfer.setDragImage(img, 0, 0);
     showGhost(it.text || "(빈 할 일)");
   });
   handle.addEventListener("drag", moveGhost);
-  handle.addEventListener("dragend", () => { hideGhost(); document.querySelectorAll(".day.drop-target, .proj-card.drop-target").forEach((d) => d.classList.remove("drop-target")); });
+  handle.addEventListener("dragend", () => { hideGhost(); document.querySelectorAll(".day.drop-target, .proj-card.drop-target, .qp-tab.qp-tab-drop, .qp-list.qp-drop").forEach((d) => d.classList.remove("drop-target", "qp-tab-drop", "qp-drop")); });
 
   const check = document.createElement("div");
   check.className = "pt-check" + (it.done ? " checked" : "");
