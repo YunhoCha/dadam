@@ -594,6 +594,7 @@ body {
 .qp-tab { border:none; background:transparent; padding:5px 11px; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; transition:.14s; }
 .qp-tab:hover { color:var(--sky-700); }
 .qp-tab.on { background:var(--white); color:var(--sky-700); box-shadow:var(--shadow-sm); }
+.qp-tab.qp-tab-drop { background:var(--sky-200); color:var(--sky-700); outline:2px dashed var(--sky-500); }
 .qp-context { font-size:12px; color:var(--ink-mute); font-weight:600; }
 .qp-list { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
 .qp-empty { font-size:12.5px; color:var(--ink-mute); line-height:1.6; padding:8px 4px; }
@@ -646,6 +647,46 @@ body {
 .proj-add:hover { background:var(--sky-50); border-color:var(--sky-400); }
 .proj-add span { font-size:14px; }
 @media (hover:none) { .proj-del, .pt-btn { opacity:.6; } .pt-date { opacity:.7; } }
+
+/* 프로젝트 완료 토글 · 완료 목록 */
+.proj-done-btn { flex-shrink:0; border:none; background:transparent; cursor:pointer; font-size:14px; line-height:1; padding:2px 3px; border-radius:6px; color:var(--sky-300); transition:.14s; }
+.proj-done-btn:hover { background:var(--sky-100); color:var(--sky-600); }
+.proj-done-btn.on { color:#36b37e; }
+.proj-card.proj-done { opacity:.6; background:var(--sky-50); }
+.proj-card.proj-done .proj-name { text-decoration:line-through; color:var(--ink-mute); }
+.proj-done-bar { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 6px; border:none; background:transparent; cursor:pointer; font-family:inherit; font-size:12px; font-weight:700; color:var(--ink-mute); padding:5px 4px; border-radius:8px; transition:.14s; }
+.proj-done-bar:hover { background:var(--sky-50); color:var(--sky-700); }
+.pdone-n { font-size:11px; font-weight:700; color:var(--ink-mute); background:var(--sky-100); padding:1px 7px; border-radius:8px; }
+
+/* 참조(링크) 블럭 — INBOX/주간/월간 안 */
+.qp-list.qp-drop { outline:2px dashed var(--sky-400); outline-offset:2px; border-radius:10px; background:var(--sky-50); }
+.qp-ref { align-items:flex-start; }
+.qp-check { flex-shrink:0; margin-top:5px; width:15px; height:15px; border:2px solid var(--sky-300); border-radius:5px; cursor:pointer; transition:.14s; }
+.qp-check:hover { border-color:var(--sky-500); }
+.qp-check.checked { background:var(--sky-500); border-color:var(--sky-500); position:relative; }
+.qp-check.checked::after { content:"✓"; color:#fff; font-size:10px; position:absolute; inset:0; display:grid; place-items:center; }
+.qp-ref-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.qp-ref.done .qp-text { text-decoration:line-through; color:var(--ink-mute); }
+.qp-ref-meta { display:flex; flex-wrap:wrap; gap:4px; padding:0 2px 2px; }
+.qp-proj { border:none; background:var(--sky-100); color:var(--sky-700); font-family:inherit; font-size:10.5px; font-weight:600; padding:1px 7px; border-radius:7px; cursor:pointer; transition:.14s; }
+.qp-proj:hover { background:var(--sky-200); }
+.qp-refdate { font-size:10.5px; font-weight:600; color:var(--ink-mute); background:var(--sky-50); padding:1px 7px; border-radius:7px; }
+
+/* 태그 메뉴: 프로젝트 아이콘 */
+.tr-ico { font-size:13px; width:14px; text-align:center; flex-shrink:0; }
+
+/* 할 일 메타의 프로젝트 링크(클릭 이동) */
+.m-proj { border:none; cursor:pointer; background:var(--sky-100); color:var(--sky-700); font-family:inherit; }
+.m-proj:hover { background:var(--sky-200); }
+
+/* 상세 모달: 프로젝트 지정 행 */
+.proj-choose { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.proj-pill { border:none; cursor:pointer; background:var(--sky-100); color:var(--sky-700); font-family:inherit; font-size:13px; font-weight:600; padding:5px 11px; border-radius:9px; transition:.14s; }
+.proj-pill:hover { background:var(--sky-200); }
+.proj-pill b { font-weight:700; }
+.proj-pill-x { border:1px solid var(--line); background:var(--white); cursor:pointer; font-size:11px; color:var(--ink-mute); width:26px; height:26px; border-radius:8px; transition:.14s; }
+.proj-pill-x:hover { background:#ffe1e7; color:var(--coral); border-color:var(--coral); }
+.proj-hint { font-size:12.5px; color:var(--ink-mute); }
 
 /* 스마트 입력: #카테고리 드롭다운 + 토큰 색칠 + 시간 인식 플래시 */
 .tag-menu {

@@ -611,7 +611,7 @@ function renderDayPanel() {
    스마트 입력 — #카테고리 드롭다운 + 시간 인식 색칠
    (한글 IME 보호: 연속 재렌더 없이 이산 이벤트만 사용)
    ============================================================ */
-let tagMenuEl = null, tagMenuEditEl = null, tagMenuInsert = null, tagMenuIndex = 0, tagMenuItems = [];
+let tagMenuEl = null, tagMenuEditEl = null, tagMenuInsert = null, tagMenuIndex = 0, tagMenuItems = [], tagMenuMode = "cat";
 
 function setupSmartInput(textEl, t) {
   textEl.addEventListener("input", () => { t.text = textEl.textContent; save(); updateTagMenu(textEl, t); });
@@ -650,9 +650,9 @@ function getTagContext(el) {
   const r = sel.getRangeAt(0);
   if (!r.collapsed || !el.contains(r.endContainer) || r.endContainer.nodeType !== 3) return null;
   const before = r.endContainer.textContent.slice(0, r.endOffset);
-  const m = before.match(/#([^\s#]*)$/);
+  const m = before.match(/([#~])([^\s#~]*)$/);
   if (!m) return null;
-  return { node: r.endContainer, start: r.endOffset - m[0].length, end: r.endOffset, partial: m[1] };
+  return { node: r.endContainer, start: r.endOffset - m[0].length, end: r.endOffset, partial: m[2], trigger: m[1] };
 }
 function ensureTagMenu() {
   if (tagMenuEl) return tagMenuEl;
@@ -666,7 +666,22 @@ function ensureTagMenu() {
 function updateTagMenu(textEl, t) {
   const ctx = getTagContext(textEl);
   if (!ctx) { hideTagMenu(); return; }
-  showTagMenuFor(textEl, ctx.partial, () => caretRect(textEl), (cat) => insertCategoryChip(textEl, ctx, cat, t));
+  if (ctx.trigger === "~")
+    showProjMenuFor(textEl, ctx.partial, () => caretRect(textEl), (proj) => insertProjectToken(textEl, ctx, proj, t));
+  else
+    showTagMenuFor(textEl, ctx.partial, () => caretRect(textEl), (cat) => insertCategoryChip(textEl, ctx, cat, t));
+}
+/* 빠른 블럭(평문)에서 ~프로젝트 → 프로젝트 할 일로 승격 + 이 목록엔 링크로 남김 */
+function updateProjMenuBlock(txt, blk, list) {
+  const ctx = getTagContext(txt);
+  if (!ctx || ctx.trigger !== "~") { if (tagMenuEditEl === txt && tagMenuMode === "proj") hideTagMenu(); return; }
+  showProjMenuFor(txt, ctx.partial, () => caretRect(txt), (proj) => {
+    const clean = (blk.text || "").replace(/~[^\s~]*$/, "").trim();
+    const it = { id: uid(), text: clean, date: null, endDate: null, start: null, end: null, categories: [], note: "", subtasks: [], star: false, done: false, doneDates: {}, recur: null, projectId: proj.id };
+    state.items.push(it);
+    const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1, { id: uid(), ref: it.id });
+    save(); hideTagMenu(); renderQuickPanel(); renderCalendar(); renderDayPanel();
+  });
 }
 function caretRect(fallbackEl) {
   const s = window.getSelection();
@@ -676,7 +691,7 @@ function caretRect(fallbackEl) {
 }
 /* 공통: 메뉴 항목 구성 + 열기 (insertFn은 선택 시 실행) */
 function showTagMenuFor(editEl, partial, rectFn, insertFn) {
-  tagMenuEditEl = editEl; tagMenuInsert = insertFn;
+  tagMenuEditEl = editEl; tagMenuInsert = insertFn; tagMenuMode = "cat";
   const q = partial.toLowerCase();
   tagMenuItems = state.categories.filter((c) => c.label.toLowerCase().includes(q)).map((c) => ({ cat: c }));
   if (partial && !state.categories.some((c) => c.label.toLowerCase() === q)) tagMenuItems.push({ newName: partial });
@@ -684,15 +699,28 @@ function showTagMenuFor(editEl, partial, rectFn, insertFn) {
   tagMenuIndex = 0;
   renderTagMenu(); positionTagMenu(rectFn());
 }
+/* ~프로젝트 드롭다운 (완료된 프로젝트는 제외) */
+function showProjMenuFor(editEl, partial, rectFn, insertFn) {
+  tagMenuEditEl = editEl; tagMenuInsert = insertFn; tagMenuMode = "proj";
+  const q = partial.toLowerCase();
+  tagMenuItems = (state.projects || []).filter((p) => !p.done && (p.name || "").toLowerCase().includes(q)).map((p) => ({ proj: p }));
+  if (partial && !(state.projects || []).some((p) => (p.name || "").toLowerCase() === q)) tagMenuItems.push({ newProjName: partial });
+  if (!tagMenuItems.length) { hideTagMenu(); return; }
+  tagMenuIndex = 0;
+  renderTagMenu(); positionTagMenu(rectFn());
+}
+function createProject(name) { const p = { id: uid(), name: name || "", collapsed: false, done: false }; state.projects.push(p); save(); return p.id; }
 function renderTagMenu() {
   const el = ensureTagMenu();
   el.innerHTML = "";
   tagMenuItems.forEach((it, i) => {
     const row = document.createElement("div");
     row.className = "tag-row" + (i === tagMenuIndex ? " on" : "");
-    row.innerHTML = it.cat
-      ? `<i class="dot ${colorClass(it.cat.color)}"></i><span>${escapeHtml(it.cat.label)}</span>`
-      : `<i class="dot c-slate"></i><span>＋ '${escapeHtml(it.newName)}' 새 카테고리</span>`;
+    row.innerHTML =
+      it.cat         ? `<i class="dot ${colorClass(it.cat.color)}"></i><span>${escapeHtml(it.cat.label)}</span>`
+      : it.proj      ? `<span class="tr-ico">📁</span><span>${escapeHtml(it.proj.name) || "(이름 없음)"}</span>`
+      : it.newProjName ? `<span class="tr-ico">📁</span><span>＋ '${escapeHtml(it.newProjName)}' 새 프로젝트</span>`
+      :                `<i class="dot c-slate"></i><span>＋ '${escapeHtml(it.newName)}' 새 카테고리</span>`;
     row.addEventListener("mousedown", (e) => { e.preventDefault(); tagMenuIndex = i; chooseTagMenu(); });
     el.appendChild(row);
   });
@@ -711,10 +739,25 @@ function hideTagMenu() { if (tagMenuEl) tagMenuEl.hidden = true; tagMenuInsert =
 function chooseTagMenu() {
   if (!tagMenuItems.length || !tagMenuInsert) return;
   const it = tagMenuItems[tagMenuIndex];
+  if (tagMenuMode === "proj") {
+    const pid = it.proj ? it.proj.id : createProject(it.newProjName);
+    tagMenuInsert(projectById(pid));
+    hideTagMenu();
+    return;
+  }
   const id = it.cat ? it.cat.id : resolveCategory(it.newName);
   const cat = state.categories.find((c) => c.id === id);
   tagMenuInsert(cat);
   hideTagMenu();
+}
+/* ~프로젝트 토큰 제거 + 항목에 프로젝트 지정 (칩은 blur 후 메타로 표시됨) */
+function insertProjectToken(el, ctx, proj, t) {
+  const node = ctx.node, full = node.textContent;
+  const before = full.slice(0, ctx.start), after = full.slice(ctx.end);
+  node.textContent = before + after;
+  const pos = Math.min(before.length, node.textContent.length);
+  try { const range = document.createRange(); range.setStart(node, pos); range.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(range); } catch {}
+  t.projectId = proj.id; t.text = el.textContent; save();
 }
 /* <input>(상세창 제목)용 — 인라인 칩 대신 값에 #이름 삽입 + 카테고리 지정 */
 function setupSmartField(inputEl, getItem) {
@@ -738,10 +781,22 @@ function setupSmartField(inputEl, getItem) {
 function updateTagMenuField(inputEl, getItem) {
   const pos = inputEl.selectionStart;
   const before = inputEl.value.slice(0, pos);
-  const m = before.match(/#([^\s#]*)$/);
+  const m = before.match(/([#~])([^\s#~]*)$/);
   if (!m) { hideTagMenu(); return; }
   const start = pos - m[0].length, end = pos;
-  showTagMenuFor(inputEl, m[1], () => inputEl.getBoundingClientRect(), (cat) => {
+  if (m[1] === "~") {
+    showProjMenuFor(inputEl, m[2], () => inputEl.getBoundingClientRect(), (proj) => {
+      const t = getItem(); if (!t) return;
+      const v = inputEl.value;
+      inputEl.value = (v.slice(0, start) + v.slice(end)).replace(/\s+$/, (s) => s.slice(0, 1) || "");
+      inputEl.setSelectionRange(start, start);
+      t.projectId = proj.id; t.text = inputEl.value; save();
+      renderItemProject(); renderCalendar(); renderDayPanel();
+      inputEl.focus();
+    });
+    return;
+  }
+  showTagMenuFor(inputEl, m[2], () => inputEl.getBoundingClientRect(), (cat) => {
     const t = getItem(); if (!t) return;
     const v = inputEl.value, ins = "#" + cat.label + " ";
     inputEl.value = v.slice(0, start) + ins + v.slice(end);
@@ -809,10 +864,13 @@ function makeBlock(t, key) {
     if (c) meta.innerHTML += `<span class="m-cat ${colorClass(c.color)}"><i class="dot"></i>${escapeHtml(c.label)}</span>`;
   }
   if (t.recur) meta.innerHTML += `<span class="m-rec">↻ ${t.recur.freq === "biweekly" ? "격주" : "매주"}</span>`;
-  if (t.projectId) { const p = projectById(t.projectId); if (p) meta.innerHTML += `<span class="m-proj">📁 ${escapeHtml(p.name) || "프로젝트"}</span>`; }
   if (t.note && t.note.trim()) meta.innerHTML += `<span class="m-note">📝 노트</span>`;
   const subs = t.subtasks || [];
   if (subs.length) meta.innerHTML += `<span class="m-step">☑ ${subs.filter((s) => s.done).length}/${subs.length}</span>`;
+  if (t.projectId) {   // 클릭 시 해당 프로젝트로 이동하는 링크
+    const p = projectById(t.projectId);
+    if (p) { const pb = document.createElement("button"); pb.className = "m-proj"; pb.innerHTML = `📁 ${escapeHtml(p.name) || "프로젝트"}`; pb.title = "프로젝트로 이동"; pb.onclick = (e) => { e.stopPropagation(); openProjectPanel(p.id); }; meta.appendChild(pb); }
+  }
   if (meta.innerHTML) main.appendChild(meta);
   main.appendChild(renderBlockSubs(t));
   el.appendChild(main);
@@ -910,8 +968,29 @@ function openItemModal(it) {
   $("recurUntilWrap").hidden = !it.recur;
   $("itemNote").value = it.note || "";
   buildItemCats();
+  renderItemProject();
   renderItemSubtasks();
   $("itemModal").hidden = false;
+}
+/* 상세 모달: 지정된 프로젝트 표시 + 이동 링크 + 해제. ~로 추가 안내 */
+function renderItemProject() {
+  const wrap = $("itemProject"); if (!wrap) return;
+  wrap.innerHTML = "";
+  const p = editingItem && editingItem.projectId ? projectById(editingItem.projectId) : null;
+  if (p) {
+    const link = document.createElement("button");
+    link.className = "proj-pill"; link.innerHTML = `📁 ${escapeHtml(p.name) || "프로젝트"} <b>↗</b>`;
+    link.title = "프로젝트로 이동";
+    link.onclick = () => { $("itemModal").hidden = true; openProjectPanel(p.id); };
+    const clear = document.createElement("button");
+    clear.className = "proj-pill-x"; clear.textContent = "✕"; clear.title = "프로젝트 해제";
+    clear.onclick = () => { editingItem.projectId = null; save(); renderItemProject(); renderCalendar(); renderDayPanel(); renderQuickPanel(); };
+    wrap.append(link, clear);
+  } else {
+    const hint = document.createElement("span");
+    hint.className = "proj-hint"; hint.textContent = "제목에 ~ 를 입력해 프로젝트 지정";
+    wrap.appendChild(hint);
+  }
 }
 /* 하위 단계(서브태스크) — 상세 모달 */
 function renderItemSubtasks() {
@@ -1475,10 +1554,13 @@ function renderQuickPanel() {
 
   const wrap = $("qpList"); wrap.innerHTML = "";
   const list = currentQuickList();
+  // 죽은 참조(원본 할 일이 삭제됨) 정리
+  const pruned = list.filter((b) => !b.ref || itemById(b.ref));
+  if (pruned.length !== list.length) { list.length = 0; list.push(...pruned); save(); }
   if (list.length === 0) {
-    wrap.innerHTML = `<div class="qp-empty">＋ 로 블럭 추가. ⠿ 드래그로 달력에, 📝로 메모로 보낼 수 있어요.</div>`;
+    wrap.innerHTML = `<div class="qp-empty">＋ 로 블럭 추가. ⠿ 드래그로 달력에, 📝로 메모로.<br>프로젝트·달력의 할 일을 여기로 <b>드래그</b>하거나 <b>~</b> 로 프로젝트를 지정하면 링크돼요.</div>`;
   } else {
-    list.forEach((blk) => wrap.appendChild(makeQuickBlock(blk, list)));
+    list.forEach((blk) => wrap.appendChild(blk.ref ? makeRefBlock(blk, list) : makeQuickBlock(blk, list)));
   }
 }
 function makeQuickBlock(blk, list) {
@@ -1499,11 +1581,19 @@ function makeQuickBlock(blk, list) {
 
   const txt = document.createElement("div");
   txt.className = "qp-text"; txt.contentEditable = "true"; txt.textContent = blk.text; txt.dataset.ph = "입력…";
-  txt.addEventListener("input", () => { blk.text = txt.textContent; save(); });
+  txt.addEventListener("input", () => { blk.text = txt.textContent; save(); updateProjMenuBlock(txt, blk, list); });
   txt.addEventListener("keydown", (e) => {
+    const menuOpen = tagMenuEl && !tagMenuEl.hidden && tagMenuEditEl === txt;
+    if (menuOpen) {
+      if (e.key === "ArrowDown") { e.preventDefault(); moveTagMenu(1); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); moveTagMenu(-1); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); chooseTagMenu(); return; }
+      if (e.key === "Escape") { e.preventDefault(); hideTagMenu(); return; }
+    }
     if (e.key === "Enter") { e.preventDefault(); txt.blur(); addQuickBlock(); }
     if (e.key === "Backspace" && txt.textContent === "") { e.preventDefault(); const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1); save(); renderQuickPanel(); }
   });
+  txt.addEventListener("blur", () => setTimeout(() => { if (tagMenuEditEl === txt) hideTagMenu(); }, 150));
 
   const toMemo = document.createElement("button");
   toMemo.className = "qp-btn"; toMemo.textContent = "📝"; toMemo.title = "메모로 보내기";
@@ -1514,6 +1604,55 @@ function makeQuickBlock(blk, list) {
   del.onclick = () => { const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1); save(); renderQuickPanel(); };
 
   el.append(handle, txt, toMemo, del);
+  return el;
+}
+/* 참조(링크) 블럭 — 실제 할 일(item)을 가리킴. 여기서 체크/수정하면 원본과 동기화 */
+function makeRefBlock(blk, list) {
+  const it = itemById(blk.ref);
+  const el = document.createElement("div");
+  el.className = "qp-block qp-ref" + (it.done ? " done" : "");
+
+  const handle = document.createElement("div");
+  handle.className = "qp-handle"; handle.textContent = "⠿"; handle.title = "달력으로 드래그 → 날짜 지정"; handle.draggable = true;
+  handle.addEventListener("dragstart", (e) => {
+    dragData = { type: "projectTodo", id: it.id };
+    e.dataTransfer.effectAllowed = "move";
+    const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+    e.dataTransfer.setDragImage(img, 0, 0);
+    showGhost(it.text || "(빈 할 일)");
+  });
+  handle.addEventListener("drag", moveGhost);
+  handle.addEventListener("dragend", () => { hideGhost(); document.querySelectorAll(".day.drop-target, .proj-card.drop-target").forEach((d) => d.classList.remove("drop-target")); });
+
+  const check = document.createElement("div");
+  check.className = "qp-check" + (it.done ? " checked" : "");
+  check.onclick = () => { it.done = !it.done; save(); renderQuickPanel(); renderCalendar(); renderDayPanel(); };
+
+  const txt = document.createElement("div");
+  txt.className = "qp-text"; txt.contentEditable = "true"; txt.textContent = it.text; txt.dataset.ph = "할 일…";
+  txt.addEventListener("input", () => { it.text = txt.textContent; save(); });
+  txt.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); txt.blur(); }
+    if (e.key === "Backspace" && txt.textContent === "") { e.preventDefault(); const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1); save(); renderQuickPanel(); }
+  });
+
+  const meta = document.createElement("div");
+  meta.className = "qp-ref-meta";
+  const proj = it.projectId ? projectById(it.projectId) : null;
+  if (proj) { const a = document.createElement("button"); a.className = "qp-proj"; a.textContent = `📁 ${proj.name || "프로젝트"}`; a.title = "프로젝트로 이동"; a.onclick = () => openProjectPanel(proj.id); meta.appendChild(a); }
+  if (it.date) { const d = document.createElement("span"); d.className = "qp-refdate"; d.textContent = it.date.slice(5).replace("-", "/"); meta.appendChild(d); }
+
+  const open = document.createElement("button");
+  open.className = "qp-btn"; open.textContent = "⚙"; open.title = "상세";
+  open.onclick = () => openItemModal(it);
+
+  const del = document.createElement("button");
+  del.className = "qp-btn"; del.textContent = "✕"; del.title = "링크 해제(원본은 유지)";
+  del.onclick = () => { const i = list.indexOf(blk); if (i >= 0) list.splice(i, 1); save(); renderQuickPanel(); };
+
+  const mainwrap = document.createElement("div"); mainwrap.className = "qp-ref-main";
+  mainwrap.append(txt); if (meta.children.length) mainwrap.append(meta);
+  el.append(handle, check, mainwrap, open, del);
   return el;
 }
 function addQuickBlock() {
@@ -1531,8 +1670,52 @@ function blockToMemo(blk, list) {
   save(); renderQuickPanel(); renderMemoList();
   openMemo(n.id);   // 메모 편집창 열어 확인
 }
-document.querySelectorAll(".qp-tab").forEach((tab) => tab.addEventListener("click", () => { qpTab = tab.dataset.qp; renderQuickPanel(); }));
+function listForTab(name) {
+  const ctx = selectedKey || todayKey;
+  if (name === "inbox") return state.inbox;
+  if (name === "weekly") return (state.weekly[weekStartKey(ctx)] ||= []);
+  if (name === "monthly") return (state.monthly[ctx.slice(0, 7)] ||= []);
+  return null;
+}
+document.querySelectorAll(".qp-tab").forEach((tab) => {
+  tab.addEventListener("click", () => { qpTab = tab.dataset.qp; renderQuickPanel(); });
+  // 탭 버튼에 할 일(프로젝트/달력)을 드롭 → 그 목록에 링크
+  if (tab.dataset.qp === "project") return;
+  tab.addEventListener("dragover", (e) => {
+    if (!dragData || !dragData.id || dragData.type === "panelBlock") return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "copy"; tab.classList.add("qp-tab-drop");
+  });
+  tab.addEventListener("dragleave", () => tab.classList.remove("qp-tab-drop"));
+  tab.addEventListener("drop", (e) => {
+    tab.classList.remove("qp-tab-drop");
+    if (!dragData || !dragData.id || dragData.type === "panelBlock") return;
+    e.preventDefault();
+    const list = listForTab(tab.dataset.qp);
+    if (list && !list.some((b) => b.ref === dragData.id)) list.push({ id: uid(), ref: dragData.id });
+    save(); qpTab = tab.dataset.qp; renderQuickPanel();
+    dragData = null;
+  });
+});
 $("qpAdd").addEventListener("click", () => { qpTab === "project" ? addProject() : addQuickBlock(); });
+
+/* INBOX/주간/월간 목록에 프로젝트·달력 할 일을 드롭 → 링크(참조) 블럭 생성 */
+(function setupQuickDrop() {
+  const wrap = $("qpList");
+  wrap.addEventListener("dragover", (e) => {
+    if (!dragData || qpTab === "project" || dragData.type === "panelBlock" || !dragData.id) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "copy"; wrap.classList.add("qp-drop");
+  });
+  wrap.addEventListener("dragleave", (e) => { if (!wrap.contains(e.relatedTarget)) wrap.classList.remove("qp-drop"); });
+  wrap.addEventListener("drop", (e) => {
+    wrap.classList.remove("qp-drop");
+    if (!dragData || qpTab === "project" || dragData.type === "panelBlock" || !dragData.id) return;
+    e.preventDefault();
+    const list = currentQuickList();
+    if (!list.some((b) => b.ref === dragData.id)) list.push({ id: uid(), ref: dragData.id });
+    save(); renderQuickPanel();
+    dragData = null;
+  });
+})();
 
 /* ============================================================
    프로젝트 — 카테고리와 별개. 프로젝트별 할 일 모음.
@@ -1540,6 +1723,7 @@ $("qpAdd").addEventListener("click", () => { qpTab === "project" ? addProject() 
    기존 캘린더/할 일 파이프라인으로 자동 표시된다.
    ============================================================ */
 function projectById(id) { return (state.projects || []).find((p) => p.id === id) || null; }
+function itemById(id) { return state.items.find((x) => x.id === id) || null; }
 function itemsForProject(pid) {
   return state.items.filter((it) => it.projectId === pid).sort((a, b) => {
     const ad = a.date || "9999", bd = b.date || "9999";   // 날짜 없는 건 아래로
@@ -1567,17 +1751,29 @@ function addProjectTodo(pid, focus) {
   save(); renderProjects();
   if (focus) requestAnimationFrame(() => { const ts = $("qpList").querySelector(`.proj-card[data-pid="${pid}"] .proj-todo:last-child .pt-text`); ts && ts.focus(); });
 }
+let showDoneProjects = false;
 function renderProjects() {
   const wrap = $("qpList"); wrap.innerHTML = "";
   if (state.projects.length === 0) {
-    wrap.innerHTML = `<div class="qp-empty">＋ 로 프로젝트를 만들어요. 각 프로젝트마다 할 일을 담고, 날짜를 정하면 달력에도 표시돼요.</div>`;
+    wrap.innerHTML = `<div class="qp-empty">＋ 로 프로젝트를 만들어요. 각 프로젝트마다 할 일을 담고, 날짜를 정하면 달력에도 표시돼요.<br>주간·월간·달력·할 일에서 <b>~</b> 를 치면 프로젝트를 지정할 수 있어요.</div>`;
     return;
   }
-  state.projects.forEach((p) => wrap.appendChild(makeProjectCard(p)));
+  const active = state.projects.filter((p) => !p.done);
+  const done = state.projects.filter((p) => p.done);
+  active.forEach((p) => wrap.appendChild(makeProjectCard(p)));
+
+  if (done.length) {
+    const bar = document.createElement("button");
+    bar.className = "proj-done-bar" + (showDoneProjects ? " open" : "");
+    bar.innerHTML = `<span>${showDoneProjects ? "▾" : "▸"} 완료된 프로젝트</span><span class="pdone-n">${done.length}</span>`;
+    bar.onclick = () => { showDoneProjects = !showDoneProjects; renderProjects(); };
+    wrap.appendChild(bar);
+    if (showDoneProjects) done.forEach((p) => wrap.appendChild(makeProjectCard(p)));
+  }
 }
 function makeProjectCard(p) {
   const card = document.createElement("div");
-  card.className = "proj-card"; card.dataset.pid = p.id;
+  card.className = "proj-card" + (p.done ? " proj-done" : ""); card.dataset.pid = p.id;
 
   const head = document.createElement("div");
   head.className = "proj-head";
@@ -1585,6 +1781,11 @@ function makeProjectCard(p) {
   const caret = document.createElement("button");
   caret.className = "proj-caret"; caret.textContent = p.collapsed ? "▸" : "▾"; caret.title = "접기/펴기";
   caret.onclick = () => { p.collapsed = !p.collapsed; save(); renderProjects(); };
+
+  const done = document.createElement("button");
+  done.className = "proj-done-btn" + (p.done ? " on" : ""); done.textContent = p.done ? "✓" : "○";
+  done.title = p.done ? "완료 해제" : "프로젝트 완료";
+  done.onclick = () => { p.done = !p.done; if (p.done) p.collapsed = true; save(); renderProjects(); };
 
   const name = document.createElement("div");
   name.className = "proj-name"; name.contentEditable = "true"; name.dataset.ph = "프로젝트 이름…";
@@ -1601,7 +1802,7 @@ function makeProjectCard(p) {
   del.className = "proj-del"; del.textContent = "🗑"; del.title = "프로젝트 삭제";
   del.onclick = () => deleteProject(p);
 
-  head.append(caret, name, count, del);
+  head.append(done, caret, name, count, del);
   card.appendChild(head);
 
   if (!p.collapsed) {
@@ -1632,8 +1833,7 @@ function makeProjectCard(p) {
     }
     const it = state.items.find((x) => x.id === dragData.id);
     if (it) {
-      it.projectId = p.id;
-      if (dragData.type !== "projectTodo") { it.date = null; it.endDate = null; }   // 캘린더 칩 → 프로젝트: 날짜 비워 달력에서 내림
+      it.projectId = p.id;   // 링크 느낌: 날짜는 그대로 두어 달력에도 계속 표시됨
       save(); renderQuickPanel(); renderCalendar(); renderDayPanel();
     }
     dragData = null;
