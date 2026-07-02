@@ -1566,11 +1566,23 @@ function activateSplit() {
 function deactivateSplit() { document.body.classList.remove("cal-split"); }
 (function setupCalSplit() {
   const m = document.querySelector(".main"); if (!m) return;
-  m.addEventListener("scroll", () => {
-    if (!isMobile() || !document.body.classList.contains("mv-cal")) return;
+  let y0 = null, x0 = null;
+  m.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { y0 = null; return; }
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX;
+  }, { passive: true });
+  m.addEventListener("touchend", (e) => {
+    if (y0 == null || !isMobile() || !document.body.classList.contains("mv-cal")) return;
+    const t = e.changedTouches[0], dy = y0 - t.clientY, dx = Math.abs(t.clientX - x0);
+    y0 = null;
+    if (Math.abs(dy) < 55 || Math.abs(dy) < dx * 1.3) return;   // 수직 스와이프만
     const split = document.body.classList.contains("cal-split");
-    if (!split && m.scrollTop > 40) activateSplit();
-    else if (split && m.scrollTop < 8) deactivateSplit();
+    if (dy > 0 && !split) {                        // 위로 슬라이드 → 분할
+      activateSplit();
+      suppressDayClick = true; setTimeout(() => { suppressDayClick = false; }, 150);
+    } else if (dy < 0 && split && m.scrollTop <= 0) {   // 맨 위에서 아래로 → 해제
+      deactivateSplit();
+    }
   }, { passive: true });
 })();
 window.addEventListener("resize", () => {

@@ -921,16 +921,15 @@ html[data-theme="notion"] .day.is-holiday:not(.is-today):not(.is-outside) .day-n
    위=달력 / 아래=선택한 날 할 일 (cal-split)
    ============================================================ */
 @media (max-width:860px) {
-  /* 달력 뷰에서 .main 자체를 스크롤 컨테이너로 */
+  /* 기본: 원래처럼 꽉 찬 달력 (스크롤 없음) */
   body.mv-cal { overflow:hidden; }
   body.mv-cal .main {
-    height:calc(100vh - 56px); overflow-y:auto; -webkit-overflow-scrolling:touch;
+    height:calc(100vh - 56px); min-height:0; overflow:hidden;
     transition:height .28s cubic-bezier(.2,.9,.3,1.05);
   }
-  body.mv-cal .main { padding-bottom:40vh; }   /* 스크롤 여유(분할 중에도 유지 → 스크롤 위치 보존) */
-  body.mv-cal.cal-split .main { height:44vh; min-height:0; }
-  /* 그리드를 자연 높이(고정 행)로 → .main 안에서 스크롤 가능 */
-  body.mv-cal .calendar-grid { flex:none; grid-auto-rows:84px; }
+  /* 위로 슬라이드하면 상단 44vh 달력(내부 스크롤) + 하단 할 일 패널 */
+  body.mv-cal.cal-split .main { height:44vh; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  body.mv-cal.cal-split .calendar-grid { flex:none; grid-auto-rows:76px; }
 
   /* 아래 절반: 선택한 날 할 일 패널 */
   body.mv-cal.cal-split .side-panel {
