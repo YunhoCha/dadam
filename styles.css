@@ -327,10 +327,10 @@ body.col-resizing { cursor:col-resize; user-select:none; }
 /* 마감 */
 .panel-deadlines { padding:20px 20px 14px; border-bottom:1px solid var(--line); }
 .deadline-list { display:flex; flex-direction:column; gap:7px; overflow-y:auto; }
-/* 오른쪽 패널 섹션 높이 조절 손잡이 (마감·작업·일지) */
-.row-resizer { height:9px; margin:3px 0; flex-shrink:0; cursor:row-resize; position:relative; touch-action:none; }
-.row-resizer::before { content:""; position:absolute; left:38%; right:38%; top:50%; height:3px; transform:translateY(-50%); border-radius:3px; background:transparent; transition:background .14s; }
-.row-resizer:hover::before, body.row-resizing .row-resizer::before { background:var(--sky-300); }
+/* 오른쪽 패널 섹션 높이 조절 손잡이 (마감·작업·일지) — 잡기 쉽게 넉넉히 */
+.row-resizer { height:16px; margin:1px 0; flex-shrink:0; cursor:row-resize; position:relative; touch-action:none; }
+.row-resizer::before { content:""; position:absolute; left:40%; right:40%; top:50%; height:4px; transform:translateY(-50%); border-radius:3px; background:var(--line); transition:background .14s, left .14s, right .14s; }
+.row-resizer:hover::before, body.row-resizing .row-resizer::before { background:var(--sky-400); left:30%; right:30%; }
 body.row-resizing { cursor:row-resize; user-select:none; }
 .dl-empty { font-size:12px; color:var(--ink-mute); padding:6px 2px; }
 .dl-card {

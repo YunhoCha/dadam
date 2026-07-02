@@ -1891,11 +1891,12 @@ $("qpAdd").addEventListener("click", () => { qpTab === "project" ? addProject() 
   });
 })();
 
-/* 오른쪽 패널 섹션(마감·작업·일지) 높이 조절 — 로컬 저장, 모바일 시트에선 자연 높이 유지 */
+/* 오른쪽 패널 섹션(마감·작업·일지) 높이 조절 — 로컬 저장, 모바일 시트에선 자연 높이 유지.
+   드래그는 window 리스너로 처리해 얇은 손잡이를 벗어나도 안 끊김 */
 (function setupRowResizers() {
   const KEYP = "dadam.h.";
   const isNarrow = () => window.matchMedia("(max-width:860px)").matches;
-  const clampH = (h) => Math.max(60, Math.min(window.innerHeight * 0.7, h));
+  const clampH = (h) => Math.max(60, Math.min(window.innerHeight * 0.75, h));
   const resizers = [...document.querySelectorAll(".row-resizer")];
   function applyRowHeights() {
     resizers.forEach((rz) => {
@@ -1906,28 +1907,32 @@ $("qpAdd").addEventListener("click", () => { qpTab === "project" ? addProject() 
       else { el.style.height = ""; el.style.maxHeight = ""; }
     });
   }
+  let cur = null, curKey = "", startY = 0, startH = 0;
+  function onMove(e) {
+    if (!cur) return;
+    const h = clampH(startH + (e.clientY - startY));
+    cur.style.height = h + "px"; cur.style.maxHeight = "none";
+    e.preventDefault();
+  }
+  function onUp() {
+    if (!cur) return;
+    const h = parseInt(cur.style.height, 10);
+    if (h) localStorage.setItem(KEYP + curKey, h);
+    cur = null; document.body.classList.remove("row-resizing");
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  }
   resizers.forEach((rz) => {
-    let dragging = false, startY = 0, startH = 0, target = null;
     rz.addEventListener("pointerdown", (e) => {
-      target = document.getElementById(rz.dataset.target); if (!target) return;
-      dragging = true; rz.setPointerCapture(e.pointerId);
+      const target = document.getElementById(rz.dataset.target); if (!target) return;
+      if (isNarrow()) return;
+      cur = target; curKey = rz.dataset.key;
       startY = e.clientY; startH = target.getBoundingClientRect().height;
-      document.body.classList.add("row-resizing"); e.preventDefault();
+      document.body.classList.add("row-resizing");
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      e.preventDefault();
     });
-    rz.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      const h = clampH(startH + (e.clientY - startY));
-      target.style.height = h + "px"; target.style.maxHeight = "none";
-    });
-    const end = (e) => {
-      if (!dragging) return; dragging = false;
-      document.body.classList.remove("row-resizing");
-      try { rz.releasePointerCapture(e.pointerId); } catch {}
-      const h = parseInt(target.style.height, 10);
-      if (h) localStorage.setItem(KEYP + rz.dataset.key, h);
-    };
-    rz.addEventListener("pointerup", end);
-    rz.addEventListener("pointercancel", end);
     rz.addEventListener("dblclick", () => {   // 더블클릭 → 기본 높이로 리셋
       const t = document.getElementById(rz.dataset.target);
       if (t) { t.style.height = ""; t.style.maxHeight = ""; }
