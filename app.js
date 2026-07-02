@@ -38,6 +38,8 @@ function normalizeState(s) {
   s.weekly   ||= {};  // 주 단위: { 일요일키: [{id,text}] }
   s.monthly  ||= {};  // 월 단위: { "YYYY-MM": [{id,text}] }
   s.projects ||= [];  // 프로젝트 [{id,name,collapsed}] — 할 일은 items에 projectId로 연결(카테고리와 별개)
+  s.dividers ||= {};  // 날짜별 구분선: { "YYYY-MM-DD": [{id,label}] }
+  s.dayOrder ||= {};  // 날짜별 수동 정렬: { "YYYY-MM-DD": ["item:<id>","div:<id>", …] }
   for (const it of s.items) {
     if (!Array.isArray(it.categories)) it.categories = it.category != null ? [it.category] : [];
     if (!Array.isArray(it.subtasks)) it.subtasks = [];
@@ -592,11 +594,17 @@ function renderDayPanel() {
   tpDate.textContent = prettyDate(selectedKey);
 
   const items = itemsForDate(selectedKey);
+  const entries = dayEntryList(selectedKey);
+  const hasDiv = (state.dividers[selectedKey] || []).length > 0;
   blockList.innerHTML = "";
-  if (items.length === 0) {
+  if (items.length === 0 && !hasDiv) {
     blockList.innerHTML = `<div class="tp-empty"><span class="em-ico">☁️</span>담은 일이 없어요.<br>아래에서 추가해요.</div>`;
   } else {
-    items.forEach((t) => blockList.appendChild(makeBlock(t, selectedKey)));
+    blockList.appendChild(makeGapAdder(selectedKey, 0));
+    entries.forEach((en, i) => {
+      blockList.appendChild(en.kind === "divider" ? makeDivider(en.d, selectedKey) : makeBlock(en.it, selectedKey));
+      blockList.appendChild(makeGapAdder(selectedKey, i + 1));
+    });
   }
   const done = items.filter((t) => isDone(t, selectedKey)).length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
@@ -831,10 +839,105 @@ function insertCategoryChip(el, ctx, cat, t) {
   renderCatFilter();
 }
 
+/* ============================================================
+   오른쪽 패널 재정렬(드래그) + 구분선
+   - 할 일/구분선 순서: state.dayOrder[key] = ["item:id","div:id", …]
+   - 하위 단계 순서: t.subtasks 배열을 직접 재배치
+   ============================================================ */
+const EMPTY_DRAG_IMG = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+let reEl = null, reArr = null, reRender = null;   // 드래그 중 요소 / 하위단계 배열 / 재렌더 콜백
+function reAfter(container, selector, y) {
+  const els = [...container.querySelectorAll(selector)].filter((el) => el !== reEl);
+  let best = { o: -Infinity, el: null };
+  for (const ch of els) { const b = ch.getBoundingClientRect(); const o = y - b.top - b.height / 2; if (o < 0 && o > best.o) best = { o, el: ch }; }
+  return best.el;
+}
+function reHandle(text, onStart) {
+  const h = document.createElement("div");
+  h.className = "re-handle"; h.textContent = "⠿"; h.title = "드래그로 순서 변경"; h.draggable = true;
+  h.addEventListener("dragstart", (e) => {
+    e.stopPropagation(); onStart(e);
+    e.dataTransfer.effectAllowed = "move";
+    const img = new Image(); img.src = EMPTY_DRAG_IMG; e.dataTransfer.setDragImage(img, 0, 0);
+    showGhost(text || "항목");
+  });
+  h.addEventListener("drag", moveGhost);
+  h.addEventListener("dragend", () => { hideGhost(); reEl = null; reArr = null; reRender = null; });
+  return h;
+}
+/* 블럭 목록(할 일 + 구분선) 드래그 재정렬 — 컨테이너에 1회 등록 */
+(function setupEntryReorder() {
+  blockList.addEventListener("dragover", (e) => {
+    if (!reEl || reEl.dataset.reKind !== "entry") return;
+    e.preventDefault();
+    const after = reAfter(blockList, ".block, .day-divider", e.clientY);
+    if (after == null) blockList.appendChild(reEl); else blockList.insertBefore(reEl, after);
+  });
+  blockList.addEventListener("drop", (e) => {
+    if (!reEl || reEl.dataset.reKind !== "entry") return;
+    e.preventDefault();
+    const tokens = [...blockList.children].map((c) => c.dataset.token).filter(Boolean);
+    state.dayOrder[selectedKey] = tokens; save(); reEl = null; renderDayPanel();
+  });
+})();
+
+/* 현재 날짜에 표시할 순서대로 {kind, it|d, token} 목록 만들기 */
+function dayEntryList(key) {
+  const base = itemsForDate(key);
+  const divs = state.dividers[key] || [];
+  const divMap = new Map(divs.map((d) => [d.id, d]));
+  const order = state.dayOrder[key] || [];
+  const seen = new Set(), out = [];
+  for (const tk of order) {
+    if (tk.startsWith("item:")) { const id = tk.slice(5); const it = base.find((x) => x.id === id); if (it && !seen.has(id)) { out.push({ kind: "todo", it, token: tk }); seen.add(id); } }
+    else if (tk.startsWith("div:")) { const id = tk.slice(4); const d = divMap.get(id); if (d) { out.push({ kind: "divider", d, token: tk }); divMap.delete(id); } }
+  }
+  for (const it of base) if (!seen.has(it.id)) out.push({ kind: "todo", it, token: "item:" + it.id });   // 순서 미지정 새 할 일은 뒤에
+  for (const d of divMap.values()) out.push({ kind: "divider", d, token: "div:" + d.id });
+  return out;
+}
+function makeGapAdder(key, i) {
+  const g = document.createElement("div");
+  g.className = "add-div-gap"; g.title = "여기에 구분선 추가";
+  g.onclick = () => insertDivider(key, i);
+  return g;
+}
+function insertDivider(key, i) {
+  const tokens = dayEntryList(key).map((e) => e.token);
+  const d = { id: uid(), label: "" };
+  state.dividers[key] = (state.dividers[key] || []).concat(d);
+  tokens.splice(i, 0, "div:" + d.id);
+  state.dayOrder[key] = tokens;
+  save(); renderDayPanel();
+  requestAnimationFrame(() => { const el = blockList.querySelector(`.day-divider[data-token="div:${d.id}"] .dd-label`); el && el.focus(); });
+}
+function deleteDivider(key, d) {
+  state.dividers[key] = (state.dividers[key] || []).filter((x) => x !== d);
+  state.dayOrder[key] = (state.dayOrder[key] || []).filter((tk) => tk !== "div:" + d.id);
+  save(); renderDayPanel();
+}
+function makeDivider(d, key) {
+  const el = document.createElement("div");
+  el.className = "day-divider"; el.dataset.token = "div:" + d.id; el.dataset.reKind = "entry";
+  const handle = reHandle(d.label || "구분선", () => { reEl = el; });
+  const line1 = document.createElement("span"); line1.className = "dd-line";
+  const label = document.createElement("div");
+  label.className = "dd-label"; label.contentEditable = "true"; label.textContent = d.label || ""; label.dataset.ph = "구분선";
+  label.addEventListener("input", () => { d.label = label.textContent; save(); });
+  label.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); label.blur(); } });
+  const line2 = document.createElement("span"); line2.className = "dd-line";
+  const del = document.createElement("button");
+  del.className = "dd-del"; del.textContent = "✕"; del.title = "구분선 삭제";
+  del.onclick = () => deleteDivider(key, d);
+  el.append(handle, line1, label, line2, del);
+  return el;
+}
+
 function makeBlock(t, key) {
   const el = document.createElement("div");
   el.className = "block" + (isDone(t, key) ? " done" : "");
-  el.dataset.id = t.id;
+  el.dataset.id = t.id; el.dataset.token = "item:" + t.id; el.dataset.reKind = "entry";
+  el.appendChild(reHandle(t.text || "할 일", () => { reEl = el; }));
 
   const star = document.createElement("button");
   star.className = "block-star" + (t.star ? " on" : "");
@@ -894,7 +997,9 @@ function renderBlockSubs(t) {
   box.className = "block-subs" + (subs.length ? "" : " empty");
   subs.forEach((s) => {
     const row = document.createElement("div");
-    row.className = "bsub-row" + (s.done ? " done" : "");
+    row.className = "bsub-row" + (s.done ? " done" : ""); row.dataset.subid = s.id;
+    const handle = reHandle(s.text || "단계", () => { reEl = row; reArr = t.subtasks; reRender = () => { renderDayPanel(); renderCalendar(); }; });
+    handle.classList.add("bsub-handle");
     const chk = document.createElement("div");
     chk.className = "block-check sm" + (s.done ? " checked" : "");
     chk.onclick = () => { s.done = !s.done; save(); renderDayPanel(); renderCalendar(); };
@@ -908,14 +1013,34 @@ function renderBlockSubs(t) {
     const d = document.createElement("button");
     d.className = "bsub-del"; d.textContent = "✕";
     d.onclick = () => { t.subtasks = t.subtasks.filter((x) => x !== s); save(); renderDayPanel(); renderCalendar(); };
-    row.append(chk, txt, d);
+    row.append(handle, chk, txt, d);
     box.appendChild(row);
   });
   const add = document.createElement("button");
   add.className = "bsub-add"; add.textContent = "＋ 하위 단계";
   add.onclick = () => addBlockSub(t);
   box.appendChild(add);
+  setupSubReorder(box, ".bsub-row", ".bsub-add");
   return box;
+}
+/* 하위 단계 드래그 재정렬 — 같은 컨테이너 안에서만 */
+function setupSubReorder(box, rowSel, addSel) {
+  if (box.dataset.reWired) return;   // 재사용 엘리먼트에 중복 등록 방지
+  box.dataset.reWired = "1";
+  box.addEventListener("dragover", (e) => {
+    if (!reEl || reEl.dataset.reKind === "entry" || reEl.parentElement !== box) return;
+    e.preventDefault();
+    const after = reAfter(box, rowSel, e.clientY);
+    const addBtn = addSel ? box.querySelector(addSel) : null;
+    if (after == null) box.insertBefore(reEl, addBtn); else box.insertBefore(reEl, after);
+  });
+  box.addEventListener("drop", (e) => {
+    if (!reEl || reEl.dataset.reKind === "entry" || reEl.parentElement !== box || !reArr) return;
+    e.preventDefault();
+    const ids = [...box.querySelectorAll(rowSel)].map((r) => r.dataset.subid);
+    reArr.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    save(); const r = reRender; reEl = null; reArr = null; reRender = null; r && r();
+  });
 }
 function addBlockSub(t) {
   t.subtasks ||= [];
@@ -998,7 +1123,9 @@ function renderItemSubtasks() {
   editingItem.subtasks ||= [];
   for (const s of editingItem.subtasks) {
     const row = document.createElement("div");
-    row.className = "sub-row" + (s.done ? " done" : "");
+    row.className = "sub-row" + (s.done ? " done" : ""); row.dataset.subid = s.id;
+    const handle = reHandle(s.text || "단계", () => { reEl = row; reArr = editingItem.subtasks; reRender = () => { renderItemSubtasks(); renderDayPanel(); renderCalendar(); }; });
+    handle.classList.add("sub-handle");
     const chk = document.createElement("div");
     chk.className = "block-check sm" + (s.done ? " checked" : "");
     chk.onclick = () => { s.done = !s.done; save(); renderItemSubtasks(); renderDayPanel(); renderCalendar(); };
@@ -1009,9 +1136,10 @@ function renderItemSubtasks() {
     const del = document.createElement("button");
     del.className = "block-del"; del.textContent = "✕";
     del.onclick = () => { editingItem.subtasks = editingItem.subtasks.filter((x) => x !== s); save(); renderItemSubtasks(); renderDayPanel(); renderCalendar(); };
-    row.append(chk, inp, del);
+    row.append(handle, chk, inp, del);
     wrap.appendChild(row);
   }
+  setupSubReorder(wrap, ".sub-row", null);
 }
 function addItemSubtask(focusInput) {
   editingItem.subtasks ||= [];

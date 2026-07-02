@@ -1,6 +1,6 @@
 /* 다담 서비스워커 — 오프라인 지원
    파일을 바꾸면 CACHE 버전을 올려야 새로 받습니다. */
-const CACHE = "dadam-v9";
+const CACHE = "dadam-v10";
 const CORE = ["./", "index.html", "styles.css", "app.js", "sync.js", "kdata.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {
