@@ -915,3 +915,32 @@ html[data-theme="notion"] .icon-btn { border-radius:7px; }
 /* 공휴일 색(하드코딩 red)을 톤다운 벽돌색으로 */
 html[data-theme="notion"] .day-label.holiday,
 html[data-theme="notion"] .day.is-holiday:not(.is-today):not(.is-outside) .day-num { color:#b0655a; }
+
+/* ============================================================
+   모바일: 달력을 아래로 스크롤하면 화면을 반으로 나눠
+   위=달력 / 아래=선택한 날 할 일 (cal-split)
+   ============================================================ */
+@media (max-width:860px) {
+  /* 달력 뷰에서 .main 자체를 스크롤 컨테이너로 */
+  body.mv-cal { overflow:hidden; }
+  body.mv-cal .main {
+    height:calc(100vh - 56px); overflow-y:auto; -webkit-overflow-scrolling:touch;
+    transition:height .28s cubic-bezier(.2,.9,.3,1.05);
+  }
+  body.mv-cal .main { padding-bottom:40vh; }   /* 스크롤 여유(분할 중에도 유지 → 스크롤 위치 보존) */
+  body.mv-cal.cal-split .main { height:44vh; min-height:0; }
+  /* 그리드를 자연 높이(고정 행)로 → .main 안에서 스크롤 가능 */
+  body.mv-cal .calendar-grid { flex:none; grid-auto-rows:84px; }
+
+  /* 아래 절반: 선택한 날 할 일 패널 */
+  body.mv-cal.cal-split .side-panel {
+    display:flex !important; position:fixed; left:0; right:0; top:44vh; bottom:56px; width:auto;
+    height:auto; min-height:0; overflow-y:auto; border:none; border-top:1px solid var(--line);
+    border-radius:20px 20px 0 0; box-shadow:0 -12px 34px rgba(44,108,176,.20); z-index:1050;
+    animation:sheetUp .28s cubic-bezier(.2,.9,.3,1.05);
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  body.mv-cal.cal-split .panel-deadlines,
+  body.mv-cal.cal-split .panel-tabs { display:none; }
+  body.mv-cal.cal-split .sheet-handle { display:block; }
+}

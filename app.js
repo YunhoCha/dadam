@@ -328,7 +328,7 @@ function makeDayCell(c) {
     ji.className = "journal-ind";
     ji.textContent = jr.mood ? MOODS[jr.mood - 1] : "📔";
     ji.title = "일지 보기";
-    ji.onclick = (e) => { e.stopPropagation(); selectDate(key); if (isMobile()) openDaySheet(); };
+    ji.onclick = (e) => { e.stopPropagation(); selectDate(key); if (isMobile() && !document.body.classList.contains("cal-split")) openDaySheet(); };
     tools.appendChild(ji);
   }
   // 연결된 메모 아이콘
@@ -367,7 +367,7 @@ function makeDayCell(c) {
     if (e.target.closest(".chip")) return;
     if (suppressDayClick) { suppressDayClick = false; return; }   // 기간 드래그/스와이프 직후 클릭 무시
     selectDate(key);
-    if (isMobile()) openDaySheet();   // 모바일: 그 날 상세를 하단 시트로
+    if (isMobile() && !document.body.classList.contains("cal-split")) openDaySheet();   // 모바일: 그 날 상세를 하단 시트로(분할 중엔 아래 패널만 갱신)
   });
   // 빈 영역 더블클릭 → 그 날짜에 일정 추가(상세창)
   el.addEventListener("dblclick", (e) => {
@@ -1526,8 +1526,9 @@ grid.addEventListener("wheel", (e) => {
 const isMobile = () => window.matchMedia("(max-width: 860px)").matches;
 function setMobileView(view) {
   const cls = view === "memo" ? "mv-memo" : (view === "cal" ? "mv-cal" : "mv-day");
-  document.body.classList.remove("mv-cal", "mv-day", "mv-memo");
+  document.body.classList.remove("mv-cal", "mv-day", "mv-memo", "cal-split");
   document.body.classList.add(cls);
+  const mainEl = document.querySelector(".main"); if (mainEl) mainEl.scrollTop = 0;
   document.querySelectorAll(".mtab").forEach((t) => t.classList.toggle("on", t.dataset.mview === view));
   if (view !== "cal") {
     const pane = view === "memo" ? "memo" : "day";
@@ -1550,7 +1551,28 @@ function openDaySheet() {
 }
 function closeDaySheet() { document.body.classList.remove("day-sheet"); }
 $("sheetBackdrop").addEventListener("click", closeDaySheet);
-$("sheetHandle").addEventListener("click", closeDaySheet);
+$("sheetHandle").addEventListener("click", () => {
+  if (document.body.classList.contains("cal-split")) { deactivateSplit(); const m = document.querySelector(".main"); if (m) m.scrollTop = 0; }
+  else closeDaySheet();
+});
+
+/* 모바일 달력: 아래로 스크롤하면 화면을 반으로 나눠 아래에 선택한 날 할 일 표시 */
+function activateSplit() {
+  document.querySelectorAll(".ptab").forEach((t) => t.classList.toggle("on", t.dataset.tab === "day"));
+  document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("on", p.dataset.pane === "day"));
+  if (!selectedKey) selectDate(todayKey);
+  document.body.classList.add("cal-split");
+}
+function deactivateSplit() { document.body.classList.remove("cal-split"); }
+(function setupCalSplit() {
+  const m = document.querySelector(".main"); if (!m) return;
+  m.addEventListener("scroll", () => {
+    if (!isMobile() || !document.body.classList.contains("mv-cal")) return;
+    const split = document.body.classList.contains("cal-split");
+    if (!split && m.scrollTop > 40) activateSplit();
+    else if (split && m.scrollTop < 8) deactivateSplit();
+  }, { passive: true });
+})();
 window.addEventListener("resize", () => {
   if (isMobile() && !document.body.classList.contains("mv-cal") && !document.body.classList.contains("mv-day") && !document.body.classList.contains("mv-memo")) {
     document.body.classList.add("mv-cal");
