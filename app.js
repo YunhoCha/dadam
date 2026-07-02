@@ -1891,6 +1891,53 @@ $("qpAdd").addEventListener("click", () => { qpTab === "project" ? addProject() 
   });
 })();
 
+/* 오른쪽 패널 섹션(마감·작업·일지) 높이 조절 — 로컬 저장, 모바일 시트에선 자연 높이 유지 */
+(function setupRowResizers() {
+  const KEYP = "dadam.h.";
+  const isNarrow = () => window.matchMedia("(max-width:860px)").matches;
+  const clampH = (h) => Math.max(60, Math.min(window.innerHeight * 0.7, h));
+  const resizers = [...document.querySelectorAll(".row-resizer")];
+  function applyRowHeights() {
+    resizers.forEach((rz) => {
+      const el = document.getElementById(rz.dataset.target); if (!el) return;
+      if (isNarrow()) { el.style.height = ""; el.style.maxHeight = ""; return; }
+      const v = parseInt(localStorage.getItem(KEYP + rz.dataset.key), 10);
+      if (v) { el.style.height = clampH(v) + "px"; el.style.maxHeight = "none"; }
+      else { el.style.height = ""; el.style.maxHeight = ""; }
+    });
+  }
+  resizers.forEach((rz) => {
+    let dragging = false, startY = 0, startH = 0, target = null;
+    rz.addEventListener("pointerdown", (e) => {
+      target = document.getElementById(rz.dataset.target); if (!target) return;
+      dragging = true; rz.setPointerCapture(e.pointerId);
+      startY = e.clientY; startH = target.getBoundingClientRect().height;
+      document.body.classList.add("row-resizing"); e.preventDefault();
+    });
+    rz.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const h = clampH(startH + (e.clientY - startY));
+      target.style.height = h + "px"; target.style.maxHeight = "none";
+    });
+    const end = (e) => {
+      if (!dragging) return; dragging = false;
+      document.body.classList.remove("row-resizing");
+      try { rz.releasePointerCapture(e.pointerId); } catch {}
+      const h = parseInt(target.style.height, 10);
+      if (h) localStorage.setItem(KEYP + rz.dataset.key, h);
+    };
+    rz.addEventListener("pointerup", end);
+    rz.addEventListener("pointercancel", end);
+    rz.addEventListener("dblclick", () => {   // 더블클릭 → 기본 높이로 리셋
+      const t = document.getElementById(rz.dataset.target);
+      if (t) { t.style.height = ""; t.style.maxHeight = ""; }
+      localStorage.removeItem(KEYP + rz.dataset.key);
+    });
+  });
+  applyRowHeights();
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(applyRowHeights, 150); });
+})();
+
 /* ============================================================
    프로젝트 — 카테고리와 별개. 프로젝트별 할 일 모음.
    할 일은 state.items에 projectId로 연결 → 날짜를 지정하면
