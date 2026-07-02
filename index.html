@@ -2,6 +2,8 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <!-- 테마: 페인트 전에 적용해 깜빡임 방지 (state.theme의 로컬 미러) -->
+  <script>try{var t=localStorage.getItem("dadam.theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>다담 — 하루를 담다</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -268,9 +270,15 @@
     <div class="modal-backdrop" data-close="settingsModal"></div>
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-head">
-        <span class="modal-title-txt">⚙ 카테고리 설정</span>
+        <span class="modal-title-txt">⚙ 설정</span>
         <button class="icon-btn sm" data-close="settingsModal" title="닫기">✕</button>
       </div>
+
+      <h4 class="set-h">테마</h4>
+      <p class="backup-desc">화면 분위기를 고르세요. 선택은 로그인한 기기끼리 함께 적용돼요.</p>
+      <div class="theme-choose" id="themeChoose"></div>
+
+      <h4 class="set-h">카테고리</h4>
       <p class="backup-desc">할 일에 붙일 카테고리를 추가·수정·삭제하세요. 색을 누르면 바뀝니다. 할 일에는 <b>여러 개</b> 지정할 수 있어요.</p>
       <div class="cat-settings-list" id="catSettingsList"></div>
       <button class="ghost-btn block-btn" id="addCatBtn">＋ 카테고리 추가</button>

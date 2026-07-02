@@ -40,6 +40,7 @@ function normalizeState(s) {
   s.projects ||= [];  // 프로젝트 [{id,name,collapsed}] — 할 일은 items에 projectId로 연결(카테고리와 별개)
   s.dividers ||= {};  // 날짜별 구분선: { "YYYY-MM-DD": [{id,label}] }
   s.dayOrder ||= {};  // 날짜별 수동 정렬: { "YYYY-MM-DD": ["item:<id>","div:<id>", …] }
+  s.theme    ||= "summer";  // 테마: "summer"(기존) | "notion" — 계정 동기화 대상
   for (const it of s.items) {
     if (!Array.isArray(it.categories)) it.categories = it.category != null ? [it.category] : [];
     if (!Array.isArray(it.subtasks)) it.subtasks = [];
@@ -48,6 +49,18 @@ function normalizeState(s) {
   return s;
 }
 normalizeState(state);
+
+/* ---------- 테마 ---------- */
+function applyTheme(name) {
+  const t = name === "notion" ? "notion" : "summer";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("dadam.theme", t); } catch {}   // 프리페인트용 로컬 미러
+}
+function setTheme(name) {
+  state.theme = name === "notion" ? "notion" : "summer";
+  applyTheme(state.theme); save(); renderThemeChoose();
+}
+applyTheme(state.theme);
 
 let viewYear, viewMonth, selectedKey = null;
 let activeCats = new Set();            // 비어있으면 전체 표시
@@ -2063,7 +2076,22 @@ function openProjectPanel(pid) {
 /* ============================================================
    카테고리 설정 (추가 / 이름 변경 / 색 / 삭제)
    ============================================================ */
-function openSettings() { renderCatSettings(); $("settingsModal").hidden = false; }
+function openSettings() { renderThemeChoose(); renderCatSettings(); $("settingsModal").hidden = false; }
+const THEMES = [
+  { id: "summer", label: "여름 하늘", desc: "파란 하늘·유리 느낌 (기존)" },
+  { id: "notion", label: "노션풍", desc: "흰색·먹색·아이보리, 담백하게" },
+];
+function renderThemeChoose() {
+  const wrap = $("themeChoose"); if (!wrap) return;
+  wrap.innerHTML = "";
+  for (const t of THEMES) {
+    const b = document.createElement("button");
+    b.className = "theme-opt" + (state.theme === t.id ? " on" : "");
+    b.innerHTML = `<span class="theme-swatch sw-${t.id}"></span><span class="theme-meta"><b>${t.label}</b><small>${t.desc}</small></span>`;
+    b.onclick = () => setTheme(t.id);
+    wrap.appendChild(b);
+  }
+}
 function refreshCats() { renderCatFilter(); renderCalendar(); renderDayPanel(); }
 
 function renderCatSettings() {
@@ -2130,6 +2158,7 @@ window.Dadam = {
     if (!next || typeof next !== "object") return;
     state = normalizeState(next);
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    applyTheme(state.theme);   // 다른 기기에서 바꾼 테마도 반영
     renderAll();
   },
   renderAll,

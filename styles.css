@@ -857,3 +857,56 @@ body { font-weight:500; }
   .fchip .dot { width:8px; height:8px; }
   .weekday-row span { font-size:10.5px; letter-spacing:.08em; }
 }
+
+/* ============================================================
+   설정 모달 — 테마 선택 UI (두 테마 공통)
+   ============================================================ */
+.set-h { font-size:13px; font-weight:700; color:var(--ink-soft); margin:2px 0 7px; }
+.theme-choose { display:flex; gap:10px; margin:0 0 18px; flex-wrap:wrap; }
+.theme-opt { flex:1; min-width:150px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1.5px solid var(--line); border-radius:12px; background:var(--white); cursor:pointer; font-family:inherit; text-align:left; transition:.15s; }
+.theme-opt:hover { border-color:var(--sky-300); }
+.theme-opt.on { border-color:var(--sky-500); box-shadow:0 0 0 3px var(--sky-100); }
+.theme-swatch { width:34px; height:34px; border-radius:9px; flex-shrink:0; border:1px solid var(--line); }
+.theme-swatch.sw-summer { background:linear-gradient(160deg,#e6f2ff,#a8d3ff); }
+.theme-swatch.sw-notion { background:linear-gradient(160deg,#f7f6f3,#e4e0d8); }
+.theme-meta { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.theme-meta b { font-size:13.5px; color:var(--ink); font-weight:600; }
+.theme-meta small { font-size:11.5px; color:var(--ink-mute); }
+
+/* ============================================================
+   테마: 노션풍 (흰색·먹색·아이보리) — 변수 remap + 표적 오버라이드
+   기능 구조 동일, 겉모습만. 거의 모든 규칙이 아래 변수를 쓰므로
+   램프만 바꿔도 전체 톤이 전환된다.
+   ============================================================ */
+html[data-theme="notion"] {
+  --sky-50:#f7f6f3;  --sky-100:#efece7; --sky-200:#e4e0d8; --sky-300:#cfc9be;
+  --sky-400:#9a938a; --sky-500:#5f574d; --sky-600:#4a443c; --sky-700:#37352f;
+  --ink:#37352f; --ink-soft:#5f574d; --ink-mute:#8b8378;
+  --white:#ffffff; --line:#e9e7e2;
+  --sun:#c99a3a; --coral:#b0655a; --mint:#7aa792; --lilac:#9a8fc4;
+  --shadow-sm:0 1px 2px rgba(20,20,15,.05);
+  --shadow-md:0 2px 8px rgba(20,20,15,.07);
+  --shadow-lg:0 8px 26px rgba(20,20,15,.12);
+  --radius:10px;
+}
+html[data-theme="notion"] body { background:var(--sky-50); }
+html[data-theme="notion"] .side-panel { background:var(--white); backdrop-filter:none; }
+html[data-theme="notion"] .brand-mark { background:var(--ink); box-shadow:none; }
+/* 손글씨 제목 → 담백한 산세리프 */
+html[data-theme="notion"] .cal-title h2,
+html[data-theme="notion"] .modal-title-txt,
+html[data-theme="notion"] .sec-head h3,
+html[data-theme="notion"] .day-head h3,
+html[data-theme="notion"] .journal-head h4 { font-family:"Noto Sans KR",system-ui,sans-serif; font-weight:600; }
+/* 코너 담백하게 */
+html[data-theme="notion"] .day,
+html[data-theme="notion"] .modal-card,
+html[data-theme="notion"] .memo-card,
+html[data-theme="notion"] .proj-card,
+html[data-theme="notion"] .block { border-radius:8px; }
+html[data-theme="notion"] .fchip,
+html[data-theme="notion"] .ghost-btn,
+html[data-theme="notion"] .icon-btn { border-radius:7px; }
+/* 공휴일 색(하드코딩 red)을 톤다운 벽돌색으로 */
+html[data-theme="notion"] .day-label.holiday,
+html[data-theme="notion"] .day.is-holiday:not(.is-today):not(.is-outside) .day-num { color:#b0655a; }
